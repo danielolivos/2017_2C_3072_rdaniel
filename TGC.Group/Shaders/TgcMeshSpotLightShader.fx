@@ -245,10 +245,11 @@ float4 ps_DiffuseMap(PS_DIFFUSE_MAP input) : COLOR0
 	float3 Hn = normalize(input.HalfAngleVec);
 
 	//Calcular atenuacion por distancia
-	float distAtten = length(lightPosition.xyz - input.WorldPosition) * lightAttenuation;
+	//float distAtten = length(lightPosition.xyz - input.WorldPosition) * lightAttenuation;
+	float distAtten = 1;
 
 	//Calcular atenuacion por Spot Light. Si esta fuera del angulo del cono tiene 0 intensidad.
-	float spotAtten = dot(-spotLightDir, Ln);
+	float spotAtten = abs(dot(-spotLightDir, Ln));
 	spotAtten = (spotAtten > spotLightAngleCos)
 					? pow(spotAtten, spotLightExponent)
 					: 0.0;
@@ -257,17 +258,19 @@ float4 ps_DiffuseMap(PS_DIFFUSE_MAP input) : COLOR0
 	float intensity = lightIntensity * spotAtten / distAtten;
 
 	//Obtener texel de la textura
-	float4 texelColor = tex2D(diffuseMap, input.Texcoord);
+	//float4 texelColor = tex2D(diffuseMap, input.Texcoord);
+	// toque para no usar texturas
+	float4 texelColor = materialDiffuseColor;
 
 	//Componente Ambient
 	float3 ambientLight = intensity * lightColor * materialAmbientColor;
 
 	//Componente Diffuse: N dot L
-	float3 n_dot_l = dot(Nn, Ln);
+	float3 n_dot_l = abs(dot(Nn, Ln));
 	float3 diffuseLight = intensity * lightColor * materialDiffuseColor.rgb * max(0.0, n_dot_l); //Controlamos que no de negativo
 
 	//Componente Specular: (N dot H)^exp
-	float3 n_dot_h = dot(Nn, Hn);
+	float3 n_dot_h = abs(dot(Nn, Hn));
 	float3 specularLight = n_dot_l <= 0.0
 			? float3(0.0, 0.0, 0.0)
 			: (intensity * lightColor * materialSpecularColor * pow(max(0.0, n_dot_h), materialSpecularExp));

@@ -1,4 +1,5 @@
 /*
+/*
 * Shader generico para TgcMesh con iluminacion dinamica por pixel (Phong Shading)
 * utilizando un tipo de luz Point-Light con atenuacion por distancia
 * Hay 3 Techniques, una para cada MeshRenderType:
@@ -16,6 +17,8 @@ float4x4 matWorld; //Matriz de transformacion World
 float4x4 matWorldView; //Matriz World * View
 float4x4 matWorldViewProj; //Matriz World * View * Projection
 float4x4 matInverseTransposeWorld; //Matriz Transpose(Invert(World))
+
+float specularFactor = 3;
 
 //Textura para DiffuseMap
 texture texDiffuseMap;
@@ -179,7 +182,7 @@ struct VS_OUTPUT_DIFFUSE_MAP
 	float3 WorldPosition : TEXCOORD1;
 	float3 WorldNormal : TEXCOORD2;
 	float3 LightVec	: TEXCOORD3;
-	float3 HalfAngleVec	: TEXCOORD4;
+	float3 ViewVec	: TEXCOORD4;
 };
 
 //Vertex Shader
@@ -200,16 +203,13 @@ VS_OUTPUT_DIFFUSE_MAP vs_DiffuseMap(VS_INPUT_DIFFUSE_MAP input)
 	Solo queremos rotarla, no trasladarla ni escalarla.
 	Por eso usamos matInverseTransposeWorld en vez de matWorld */
 	output.WorldNormal = mul(input.Normal, matInverseTransposeWorld).xyz;
-
+	
 	//LightVec (L): vector que va desde el vertice hacia la luz. Usado en Diffuse y Specular
 	output.LightVec = lightPosition.xyz - output.WorldPosition;
 
 	//ViewVec (V): vector que va desde el vertice hacia la camara.
-	float3 viewVector = eyePosition.xyz - output.WorldPosition;
-
-	//HalfAngleVec (H): vector de reflexion simplificado de Phong-Blinn (H = |V + L|). Usado en Specular
-	output.HalfAngleVec = viewVector + output.LightVec;
-
+	output.ViewVec = eyePosition.xyz - output.WorldPosition;
+	
 	return output;
 }
 
@@ -220,7 +220,7 @@ struct PS_DIFFUSE_MAP
 	float3 WorldPosition : TEXCOORD1;
 	float3 WorldNormal : TEXCOORD2;
 	float3 LightVec	: TEXCOORD3;
-	float3 HalfAngleVec	: TEXCOORD4;
+	float3 ViewVec	: TEXCOORD4;
 };
 
 //Pixel Shader
@@ -229,14 +229,18 @@ float4 ps_DiffuseMap(PS_DIFFUSE_MAP input) : COLOR0
 	//Normalizar vectores
 	float3 Nn = normalize(input.WorldNormal);
 	float3 Ln = normalize(input.LightVec);
-	float3 Hn = normalize(input.HalfAngleVec);
+	float3 Vn = normalize(input.ViewVec);
 
+	
 	//Calcular intensidad de luz, con atenuacion por distancia
-	float distAtten = length(lightPosition.xyz - input.WorldPosition) * lightAttenuation;
-	float intensity = lightIntensity / distAtten; //Dividimos intensidad sobre distancia (lo hacemos lineal pero tambien podria ser i/d^2)
+//	float distAtten = length(lightPosition.xyz - input.WorldPosition) * lightAttenuation;
+//	float intensity = lightIntensity / distAtten; //Dividimos intensidad sobre distancia (lo hacemos lineal pero tambien podria ser i/d^2)
+	float intensity = 1;
 
 	//Obtener texel de la textura
 	float4 texelColor = tex2D(diffuseMap, input.Texcoord);
+	// toque para no usar texturas
+	//float4 texelColor = materialDiffuseColor;
 
 	//Componente Ambient
 	float3 ambientLight = intensity * lightColor * materialAmbientColor;
@@ -245,16 +249,17 @@ float4 ps_DiffuseMap(PS_DIFFUSE_MAP input) : COLOR0
 	float3 n_dot_l = dot(Nn, Ln);
 	float3 diffuseLight = intensity * lightColor * materialDiffuseColor.rgb * max(0.0, n_dot_l); //Controlamos que no de negativo
 
-	//Componente Specular: (N dot H)^exp
-	float3 n_dot_h = dot(Nn, Hn);
-	float3 specularLight = n_dot_l <= 0.0
-			? float3(0.0, 0.0, 0.0)
-			: (intensity * lightColor * materialSpecularColor * pow(max(0.0, n_dot_h), materialSpecularExp));
+	
+	float ks = saturate(dot(reflect(-Ln,Nn), Vn));
+	float3 specularLight = specularFactor * intensity * lightColor * materialSpecularColor *pow(ks,materialSpecularExp);
+	
 
 	/* Color final: modular (Emissive + Ambient + Diffuse) por el color de la textura, y luego sumar Specular.
 	   El color Alpha sale del diffuse material */
 	float4 finalColor = float4(saturate(materialEmissiveColor + ambientLight + diffuseLight) * texelColor + specularLight, materialDiffuseColor.a);
 
+	//return float4(specularLight , 1);
+	//return float4(Nn , 1);
 	return finalColor;
 }
 
