@@ -18,7 +18,13 @@ using TGC.Core.Terrain;
 namespace TGC.Group.Model
 {
 
+    static class defines
+    {
+        public const int MODO_CAMARA = 0;
+        public const int MODO_GAME = 1;
+        public const int MODO_TEST_BLOCK = 2;
 
+    }
     public class Block
     {
         private static readonly Random random = new Random();
@@ -177,110 +183,6 @@ namespace TGC.Group.Model
             matWorldSurfaceBock = Matrix.Translation(0, 7, 0) *Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
         }
 
-        /*
-        public BlockImpar(Vector3 pos, GameModel pmodel, int ptipo)
-        {
-            model = pmodel;
-            tipo = ptipo;
-            Position = pos;
-            Orient = Helper.CalcularUVN(pos);
-            Matrix OrientPiso = Matrix.Identity;
-            Matrix OrientPared = Helper.MatrixfromBasis(    1,0,0,  
-                                                            0,0,-1,   
-                                                            0,1,0);
-
-            Matrix OrientParedI = Helper.MatrixfromBasis(   1, 0, 0, 
-                                                            0, 0, 1, 
-                                                            0, 1, 0);
-
-            Matrix OrientParedU = Helper.MatrixfromBasis(0, 1, 0,
-                                                         1, 0, 0,
-                                                         0, 0, 1);
-
-            Matrix OrientParedD = Helper.MatrixfromBasis(0, 1, 0,
-                                                         -1, 0, 0,
-                                                         0, 0, 1);
-
-            Matrix MatPos = Matrix.Translation(pos);
-
-            int t = 0;
-            // piso y techo
-            for (int i=-r; i <= r; ++i)
-            {
-                for (int j = -r; j <= r; ++j)
-                {
-                    // 1-escalo
-                    matWorld[t] = Matrix.Scaling(escale);
-                    // 2-traslado en el espacio del bloque
-                    matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, i==0 || j==0 ? 0 : 10, j * 10));
-                    // 3- oriento en el spacio del bloque y luego en world space
-                    matWorld[t] = matWorld[t] * OrientPiso * Orient;
-                    // 4- traslado a la pos. en world space
-                    matWorld[t] = matWorld[t] * MatPos;
-                    ++t;
-                }
-
-            }
-
-            // pared
-            for (int i = -r; i <= r; ++i)
-            if (i!=0 )
-            {
-
-                // pared der
-                matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i*10, 5, 5)) * Orient * MatPos;
-                // pared izq 
-                matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i*10, 5, -5)) * Orient * MatPos;
-                // pared U
-                matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-5, 5, i * 10)) * Orient * MatPos;
-                matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5, i * 10)) * Orient * MatPos;
-            }
-            cant_mesh = t;
-
-            for(int i=0;i<cant_mesh;++i)
-                mesh_index[i] = random.Next(0, 4);
-
-
-            // calculo el bounding box de toto el bloque
-            Matrix T = Orient * MatPos;
-            Vector3[] p = new Vector3[8];
-            float min_x = 10000000, min_y = 10000000, min_z = 10000000;
-            float max_x = -10000000, max_y = -10000000, max_z = -10000000;
-            p[0] = new Vector3(-largo/2, 0, -ancho / 2);
-            p[1] = new Vector3(largo  / 2, 0, -ancho  / 2);
-            p[2] = new Vector3(largo  / 2, alto, -ancho / 2);
-            p[3] = new Vector3(-largo  / 2, alto , -ancho / 2);
-
-            p[4] = new Vector3(-largo  / 2, 0, ancho / 2);
-            p[5] = new Vector3(largo  / 2, 0, ancho / 2);
-            p[6] = new Vector3(largo  / 2, alto , ancho / 2);
-            p[7] = new Vector3(-largo / 2, alto, ancho / 2);
-
-            for (int i = 0; i < 8; ++i)
-            {
-                p[i].TransformCoordinate(T);
-                if (p[i].X < min_x)
-                    min_x = p[i].X;
-                if (p[i].Y < min_y)
-                    min_y = p[i].Y;
-                if (p[i].Z < min_z)
-                    min_z = p[i].Z;
-                if (p[i].X > max_x)
-                    max_x = p[i].X;
-                if (p[i].Y > max_y)
-                    max_y = p[i].Y;
-                if (p[i].Z > max_z)
-                    max_z = p[i].Z;
-            }
-            BoundingBox = new TgcBoundingAxisAlignBox(new Vector3(min_x, min_y, min_z), new Vector3(max_x, max_y, max_z));
-
-            // matriz que transforma una caja de 1 x 1 x 1 ubicada en orgin y sin orientacion
-            matWorldBock = Matrix.Scaling(new Vector3(largo,alto,ancho)) * T;
-
-            if (tipo ==1  || tipo == 2)
-                matWorldBock = Matrix.Translation(0, 7, 0) *
-                    Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
-        }*/
 
         public bool render()
         {
@@ -291,6 +193,7 @@ namespace TGC.Group.Model
             switch(tipo)
             {
                 case 0:
+                    // trench
                     for (int i = 0; i < cant_mesh; ++i)
                     {
                         int index = mesh_index[i];
@@ -308,6 +211,8 @@ namespace TGC.Group.Model
                     break;
                 case 1:
                 case 2:
+                case 3:
+                    // surface
                     foreach (TgcMesh mesh in model.surface)
                     {
                         mesh.Transform = matWorldSurfaceBock;
@@ -320,7 +225,7 @@ namespace TGC.Group.Model
                     break;
             }
 
-            if (model.test_bloque)
+            if (model.curr_mode == defines.MODO_TEST_BLOCK)
                 BoundingBox.render();
 
             return true;
@@ -352,8 +257,7 @@ namespace TGC.Group.Model
         }
 
 
-        public bool test_bloque = false;
-        public bool moving = true;
+        public int curr_mode = defines.MODO_GAME;
         public bool first_person = false;
 
         public TgcBox Box { get; set; }
@@ -428,10 +332,9 @@ namespace TGC.Group.Model
                 mesh.Technique = TgcShaders.Instance.getTgcMeshTechnique(mesh.RenderType);
             }
 
-            if (test_bloque)
+            if (curr_mode==defines.MODO_TEST_BLOCK)
             {
                 scene.Add(new Block(new Vector3(0, 100, 0) , this, 0));
-                moving = false;
             }
             else
             {
@@ -441,7 +344,7 @@ namespace TGC.Group.Model
             Vector3 LP = new Vector3(0, star_r * 5, star_r);
             Vector3 cameraPosition;
             Vector3 lookAt;
-            if (moving)
+            if (curr_mode == defines.MODO_GAME)
             {
                 float ship_alfa = 1;
                 float ship_beta = 1.5f;
@@ -468,7 +371,7 @@ namespace TGC.Group.Model
             }
             else
             {
-                if (test_bloque)
+                if (curr_mode == defines.MODO_TEST_BLOCK)
                 {
                     LP = new Vector3(0, 150, 0);
                     cameraPosition = new Vector3(0, 140, 200);
@@ -499,7 +402,7 @@ namespace TGC.Group.Model
             currentShader.SetValue("specularFactor", (float)0.7);
 
 
-            LightBox = TgcBox.fromSize(LP, test_bloque ? new Vector3(10,10,10) : new Vector3(100,100,100));
+            LightBox = TgcBox.fromSize(LP, curr_mode == defines.MODO_TEST_BLOCK ? new Vector3(10,10,10) : new Vector3(100,100,100));
             LightBox.AutoTransformEnable = true;
 
             xm = Input.Xpos;
@@ -540,7 +443,7 @@ namespace TGC.Group.Model
                     float x = FastMath.Cos(alfa) * FastMath.Sin(beta);
                     float y = FastMath.Sin(alfa) * FastMath.Sin(beta);
                     float z = FastMath.Cos(beta);
-                    int tipo = Math.Abs(beta - FastMath.PI_HALF) < 0.1 ? 0 : 2;       // random.Next(4);
+                    int tipo = Math.Abs(beta - FastMath.PI_HALF) < 0.1 ? 0 : 1+random.Next(0,3);
                     scene.Add(new Block(new Vector3(x, y, z) * star_r, this,tipo));
                 }
             }
@@ -558,6 +461,12 @@ namespace TGC.Group.Model
 
             if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.F))
                 first_person = !first_person;
+            if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.C))
+            { 
+                curr_mode = (curr_mode+1)%2;
+                if(curr_mode == defines.MODO_CAMARA)
+                    Camara.SetCamera(new Vector3(0, 0, star_r * 2), new Vector3(0, 0, 0));
+            }
 
             if (Input.buttonDown(TgcD3dInput.MouseButtons.BUTTON_RIGHT))
                 ElapsedTime = 0;
@@ -582,7 +491,7 @@ namespace TGC.Group.Model
                     xm = Input.Xpos;
                     ym = Input.Ypos;
 
-                    if (moving)
+                    if (curr_mode == defines.MODO_GAME)
                     {
                         if (!Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftShift))
                         {
@@ -602,7 +511,7 @@ namespace TGC.Group.Model
                     {
                         // uso el desplazamiento en x para rotar el punto de vista 
                         // en el plano xy
-                        float k = !Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftControl) ? 0.05f : 0.5f;
+                        float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftShift) ? 0.05f : 0.5f;
                         float tot_x = 800;
                         float an = dx / tot_x * 2 * FastMath.PI * k;
                         Matrix T = Matrix.RotationY(an);
@@ -667,7 +576,7 @@ namespace TGC.Group.Model
             wm = Input.WheelPos;
             if(FastMath.Abs(zDelta)>0.1f)
             {
-                float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftControl) ? 10 : 100;
+                float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftShift) ? 10 : 100;
                 Vector3 LF = Camara.Position;
                 Vector3 ViewDir = Camara.LookAt - LF;
                 ViewDir.Normalize();
@@ -685,7 +594,7 @@ namespace TGC.Group.Model
                 Camara.SetCamera(LF, Camara.LookAt);
             }
 
-            if (moving)
+            if (curr_mode == defines.MODO_GAME)
             {
                 if (ElapsedTime < 10)
                 {
@@ -768,66 +677,79 @@ namespace TGC.Group.Model
 
             currentShader.SetValue("eyePosition", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
 
-            if (test_bloque)
+            switch (curr_mode)
             {
-                scene[0].render();
-                //Box.Transform = scene[0].matWorldBock;
-                //Box.render();
-                Vector3 Q = Camara.Position;
-                DrawText.drawText("X=" + Q.X + "  Y=" + Q.Y +"  Z=" + Q.Z, 5, 20, Color.Yellow);
-            }
-            else
-            if (moving)
-            {
-                //Render SkyBox
-                skyBox.render();
+                case defines.MODO_TEST_BLOCK:
+                    scene[0].render();
+                    //Box.Transform = scene[0].matWorldBock;
+                    //Box.render();
+                    Vector3 Q = Camara.Position;
+                    DrawText.drawText("X=" + Q.X + "  Y=" + Q.Y + "  Z=" + Q.Z, 5, 20, Color.Yellow);
+                    DrawText.drawText("TEST BLOCK", 700, 30, Color.Yellow);
+                    break;
+                case defines.MODO_GAME:
+                    {
+                        //Render SkyBox
+                        skyBox.render();
+                        int cant_dibujados = 0;
+                        float dist_lod = 300000;
+                        foreach (Block bloque in scene)
+                        {
+                            if ((bloque.Position - Camara.Position).LengthSq() < dist_lod)
+                            {
+                                if (bloque.render())
+                                    cant_dibujados++;
+                            }
+                            else
+                            {
+                                //Box.Transform = bloque.matWorldBock;
+                                //Box.render();
+                            }
+                        }
 
-                int cant_dibujados = 0;
-                float dist_lod = 300000;
-                foreach (Block bloque in scene)
-                {
-                    if ((bloque.Position - Camara.Position).LengthSq() < dist_lod)
-                    {
-                        if (bloque.render())
-                            cant_dibujados++;
-                    }
-                    else
-                    {
-                        //Box.Transform = bloque.matWorldBock;
-                        //Box.render();
-                    }
-                }
-                DrawText.drawText("Cant: " + cant_dibujados, 5, 20, Color.Yellow);
-            }
-            else
-            {
-                foreach (Block bloque in scene)
-                {
-                    TgcBox pbox;
-                    switch(bloque.tipo)
-                    {
-                        case 0:
-                        case 1:
-                            pbox = BlockTrench;
-                            break;
-                        default:
-                            pbox = BlockSurface;
-                            break;
+                        LightBox.render();
+                        if (!first_person)
+                        {
+                            ship.PStart = ship_pos;
+                            ship.PEnd = ship_pos + ship_vel * 5;
+                            ship.updateValues();
+                            ship.render();
+                        }
+
+                        DrawText.drawText("Cant: " + cant_dibujados, 5, 20, Color.Yellow);
+                        DrawText.drawText("F -> toogle first person", 700, 20, Color.Yellow);
+                        DrawText.drawText("GAME MODE    (shift accel)", 700, 30, Color.Yellow);
+
 
                     }
-                    pbox.Transform = bloque.matWorldBock;
-                    pbox.render();
-                }
+                    break;
+                case defines.MODO_CAMARA:
+                default:
+                    {
+                        foreach (Block bloque in scene)
+                        {
+                            TgcBox pbox;
+                            switch (bloque.tipo)
+                            {
+                                case 0:
+                                case 1:
+                                    pbox = BlockTrench;
+                                    break;
+                                default:
+                                    pbox = BlockSurface;
+                                    break;
+
+                            }
+                            pbox.Transform = bloque.matWorldBock;
+                            pbox.render();
+                        }
+                    }
+                    DrawText.drawText("CAMARA MODE   (shift mas lenta)", 700, 30, Color.Yellow);
+                    break;
             }
 
-            LightBox.render();
-            if (!first_person)
-            {
-                ship.PStart = ship_pos;
-                ship.PEnd = ship_pos + ship_vel*5;
-                ship.updateValues();
-                ship.render();
-            }
+            DrawText.drawText("C->Toogle Camara mode" , 400, 10, Color.Yellow);
+
 
 
             //Finaliza el render y presenta en pantalla, al igual que el preRender se debe para casos puntuales es mejor utilizar a mano las operaciones de EndScene y PresentScene
@@ -1018,3 +940,111 @@ namespace TGC.Group.Model
 
 
     }
+
+
+
+// codigo deprecado
+/*
+public BlockImpar(Vector3 pos, GameModel pmodel, int ptipo)
+{
+    model = pmodel;
+    tipo = ptipo;
+    Position = pos;
+    Orient = Helper.CalcularUVN(pos);
+    Matrix OrientPiso = Matrix.Identity;
+    Matrix OrientPared = Helper.MatrixfromBasis(    1,0,0,  
+                                                    0,0,-1,   
+                                                    0,1,0);
+
+    Matrix OrientParedI = Helper.MatrixfromBasis(   1, 0, 0, 
+                                                    0, 0, 1, 
+                                                    0, 1, 0);
+
+    Matrix OrientParedU = Helper.MatrixfromBasis(0, 1, 0,
+                                                 1, 0, 0,
+                                                 0, 0, 1);
+
+    Matrix OrientParedD = Helper.MatrixfromBasis(0, 1, 0,
+                                                 -1, 0, 0,
+                                                 0, 0, 1);
+
+    Matrix MatPos = Matrix.Translation(pos);
+
+    int t = 0;
+    // piso y techo
+    for (int i=-r; i <= r; ++i)
+    {
+        for (int j = -r; j <= r; ++j)
+        {
+            // 1-escalo
+            matWorld[t] = Matrix.Scaling(escale);
+            // 2-traslado en el espacio del bloque
+            matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, i==0 || j==0 ? 0 : 10, j * 10));
+            // 3- oriento en el spacio del bloque y luego en world space
+            matWorld[t] = matWorld[t] * OrientPiso * Orient;
+            // 4- traslado a la pos. en world space
+            matWorld[t] = matWorld[t] * MatPos;
+            ++t;
+        }
+
+    }
+
+    // pared
+    for (int i = -r; i <= r; ++i)
+    if (i!=0 )
+    {
+
+        // pared der
+        matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i*10, 5, 5)) * Orient * MatPos;
+        // pared izq 
+        matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i*10, 5, -5)) * Orient * MatPos;
+        // pared U
+        matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-5, 5, i * 10)) * Orient * MatPos;
+        matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5, i * 10)) * Orient * MatPos;
+    }
+    cant_mesh = t;
+
+    for(int i=0;i<cant_mesh;++i)
+        mesh_index[i] = random.Next(0, 4);
+
+
+    // calculo el bounding box de toto el bloque
+    Matrix T = Orient * MatPos;
+    Vector3[] p = new Vector3[8];
+    float min_x = 10000000, min_y = 10000000, min_z = 10000000;
+    float max_x = -10000000, max_y = -10000000, max_z = -10000000;
+    p[0] = new Vector3(-largo/2, 0, -ancho / 2);
+    p[1] = new Vector3(largo  / 2, 0, -ancho  / 2);
+    p[2] = new Vector3(largo  / 2, alto, -ancho / 2);
+    p[3] = new Vector3(-largo  / 2, alto , -ancho / 2);
+
+    p[4] = new Vector3(-largo  / 2, 0, ancho / 2);
+    p[5] = new Vector3(largo  / 2, 0, ancho / 2);
+    p[6] = new Vector3(largo  / 2, alto , ancho / 2);
+    p[7] = new Vector3(-largo / 2, alto, ancho / 2);
+
+    for (int i = 0; i < 8; ++i)
+    {
+        p[i].TransformCoordinate(T);
+        if (p[i].X < min_x)
+            min_x = p[i].X;
+        if (p[i].Y < min_y)
+            min_y = p[i].Y;
+        if (p[i].Z < min_z)
+            min_z = p[i].Z;
+        if (p[i].X > max_x)
+            max_x = p[i].X;
+        if (p[i].Y > max_y)
+            max_y = p[i].Y;
+        if (p[i].Z > max_z)
+            max_z = p[i].Z;
+    }
+    BoundingBox = new TgcBoundingAxisAlignBox(new Vector3(min_x, min_y, min_z), new Vector3(max_x, max_y, max_z));
+
+    // matriz que transforma una caja de 1 x 1 x 1 ubicada en orgin y sin orientacion
+    matWorldBock = Matrix.Scaling(new Vector3(largo,alto,ancho)) * T;
+
+    if (tipo ==1  || tipo == 2)
+        matWorldBock = Matrix.Translation(0, 7, 0) *
+            Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
+}*/
