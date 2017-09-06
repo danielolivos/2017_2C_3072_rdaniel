@@ -42,7 +42,7 @@ namespace TGC.Group.Model
         public TgcBoundingAxisAlignBox BoundingBox;
         public GameModel model;
         public Matrix matWorldBock = new Matrix();
-        public Matrix matWorldSurfaceBock = new Matrix();
+        public Matrix matWorldSurfaceBlock = new Matrix();
         public int tipo;
 
 
@@ -54,7 +54,10 @@ namespace TGC.Group.Model
             int prof = 2;       // profundidad del trench
 
             Orient = Helper.CalcularUVN(pos);
-            Matrix OrientPiso = Matrix.Identity;
+            Matrix OrientTecho = Helper.MatrixfromBasis(1, 0, 0,
+                                                            0, -1, 0,
+                                                            0, 0, 1);
+
             Matrix OrientPared = Helper.MatrixfromBasis(1, 0, 0,
                                                             0, 0, -1,
                                                             0, 1, 0);
@@ -76,64 +79,116 @@ namespace TGC.Group.Model
 
             Matrix MatPos = Matrix.Translation(pos);
 
-            int t = 0;
+            bool sin_salida = tipo==1?true:false;
+            bool tunel = sin_salida ? false : random.Next(0, 4) == 0 ? true : false;
+            
             // piso y techo
-            for (int i = -r; i < r; ++i)
+            int t = 0;
+            if (tunel)
             {
-                for (int j = -r; j < r; ++j)
-                if((i>=-2 && i<=1) || (j >= -2 && j <= 1))
+                for (int i = -r; i < r; ++i)
                 {
-                    
-                    // 1-escalo
-                    matWorld[t] = Matrix.Scaling(escale);
-                    // 2-traslado en el espacio del bloque
-                    matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, i==0 || i==-1 || j == 0 || j == -1 ? -10*(prof-1) : 10, j * 10));
-                    // 3- oriento en el spacio del bloque y luego en world space
-                    matWorld[t] = matWorld[t] * OrientPiso * Orient;
-                    // 4- traslado a la pos. en world space
-                    matWorld[t] = matWorld[t] * MatPos;
-                    ++t;
+                    for (int j = -r; j < r; ++j)
+                        if (i == 0 || i == -1 || j == 0 || j == -1)
+                        {
+                            // piso
+                            matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient *MatPos;
+                            ++t;
+
+                            if (i != -r && i != r - 1 && j != -r && j != r - 1)
+                            {
+                                // techo
+                                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10, 0, j * 10)) * Orient * MatPos;
+                                ++t;
+                            }
+                        }
+                }
+            }
+            else
+            {
+                for (int i = -r; i < r; ++i)
+                {
+                    for (int j = -r; j < r; ++j)
+                        if ((i >= -2 && i <= 1) || (j >= -2 && j <= 1))
+                        {
+
+                            // 1-escalo
+                            matWorld[t] = Matrix.Scaling(escale);
+                            // 2-traslado en el espacio del bloque
+                            if (i == 0 || i == -1 || j == 0 || j == -1)
+                                //  piso
+                                matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient;
+                            else
+                                //  techo
+                                matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, 10, j * 10)) * Orient;
+
+                            // 4- traslado a la pos. en world space
+                            matWorld[t] = matWorld[t] * MatPos;
+                            ++t;
+                        }
+
+                }
+            }
+
+            // pared
+            for (int s = 0; s < prof; ++s)
+            {
+                for (int i = -r; i < r; ++i)
+                    if (i != 0 && i != -1)
+                    {
+
+                        // pared der
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, 5)) * Orient * MatPos;
+                        // pared izq 
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, -15)) * Orient * MatPos;
+                        // pared U
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-15, 5 - 10 * s, i * 10)) * Orient * MatPos;
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5 - 10 * s, i * 10)) * Orient * MatPos;
+                    }
+
+                if (sin_salida)
+                {
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(0, 5 - 10 * s, -10 * r-5)) * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(-10, 5 - 10 * s, -10 * r-5)) * Orient * MatPos;
+
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(0, 5 - 10 * s, 10 * r-5)) * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(-10, 5 - 10 * s, 10 * r-5)) * Orient * MatPos;
+
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10 * r - 5, 5 - 10 * s, 0)) * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10 * r - 5, 5 - 10 * s, -10)) * Orient * MatPos;
+
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10 * r - 5, 5 - 10 * s, 0)) * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10 * r - 5, 5 - 10 * s, -10)) * Orient * MatPos;
+
+
+
                 }
 
             }
 
-            // pared
-            for(int s=0;s<prof;++s)
-            for (int i = -r; i < r; ++i)
-                if (i != 0 && i!=-1)
-                {
 
-                    // pared der
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10, 5-10*s, 5)) * Orient * MatPos;
-                    // pared izq 
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, -15)) * Orient * MatPos;
-                    // pared U
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-15, 5 - 10 * s, i * 10)) * Orient * MatPos;
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5 - 10 * s, i * 10)) * Orient * MatPos;
-                }
-
-            for (int i = 0; i < t; ++i)
+                for (int i = 0; i < t; ++i)
                 mesh_index[i] = random.Next(0, 4);
 
             // agrego los cuadrantes vacios
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, -r * 5 - 10)) * OrientPiso * Orient * MatPos;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, -r * 5 - 10)) * Orient * MatPos;
             mesh_index[t++] = -1;
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3  , 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5 , 0, -r * 5 - 10)) * OrientPiso * Orient * MatPos;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3  , 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5 , 0, -r * 5 - 10)) * Orient * MatPos;
             mesh_index[t++] = -1;
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, r * 5)) * OrientPiso * Orient * MatPos;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, r * 5)) * Orient * MatPos;
             mesh_index[t++] = -1;
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5, 0, r * 5)) * OrientPiso * Orient * MatPos;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5, 0, r * 5)) * Orient * MatPos;
             mesh_index[t++] = -1;
 
             // agrego el pipepeline
             if (random.Next(0, 5) == 0)
             {
                 matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
-                    * Matrix.Translation(new Vector3(-2, 6, -30)) * OrientPiso * Orient * MatPos;
+                    * Matrix.Translation(new Vector3(-2, 6, -30)) * Orient * MatPos;
                 mesh_index[t++] = 6;
 
                 matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
-                    * Matrix.Translation(new Vector3(-2, 9, -32)) * OrientPiso * Orient * MatPos;
+                    * Matrix.Translation(new Vector3(-2, 9, -32)) * Orient * MatPos;
                 mesh_index[t++] = 6;
 
                 matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
@@ -180,7 +235,8 @@ namespace TGC.Group.Model
             matWorldBock = Matrix.Scaling(new Vector3(largo, alto, ancho)) * T;
 
             // matriz que transforma una mesh list que constituye un block (de 100x100x100) ubicada en orgin y sin orientacion
-            matWorldSurfaceBock = Matrix.Translation(0, 7, 0) *Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
+            matWorldSurfaceBlock = Matrix.Translation(0, 7, 0) * Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
+
         }
 
 
@@ -193,7 +249,8 @@ namespace TGC.Group.Model
             switch(tipo)
             {
                 case 0:
-                    // trench
+                case 1:
+                    // trench 
                     for (int i = 0; i < cant_mesh; ++i)
                     {
                         int index = mesh_index[i];
@@ -209,13 +266,13 @@ namespace TGC.Group.Model
                         }
                     }
                     break;
-                case 1:
                 case 2:
                 case 3:
+                case 4:
                     // surface
                     foreach (TgcMesh mesh in model.surface)
                     {
-                        mesh.Transform = matWorldSurfaceBock;
+                        mesh.Transform = matWorldSurfaceBlock;
                         mesh.render();
                     }
                     break;
@@ -311,8 +368,8 @@ namespace TGC.Group.Model
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m3-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m4-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m5-TgcScene.xml").Meshes[0]);
-            meshes.Add(loader.loadSceneFromFile(MediaDir + "Turbolaser-TgcScene.xml").Meshes[0]);
-            meshes.Add(loader.loadSceneFromFile(MediaDir + "tuberia-TgcScene.xml").Meshes[0]);
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "Turbolaser-TgcScene.xml").Meshes[0]);       // 5
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "tuberia-TgcScene.xml").Meshes[0]);          // 6
 
 
             foreach (TgcMesh mesh in meshes)
@@ -331,6 +388,7 @@ namespace TGC.Group.Model
                 mesh.Effect = currentShader;
                 mesh.Technique = TgcShaders.Instance.getTgcMeshTechnique(mesh.RenderType);
             }
+
 
             if (curr_mode==defines.MODO_TEST_BLOCK)
             {
@@ -428,6 +486,8 @@ namespace TGC.Group.Model
 
         public void ArmarBanda(float alfa_0 , float alfa_1 , float beta_0 , float beta_1)
         {
+            int largo = 6;
+            int l = 0;
             float cant_j = (int)(star_r * (beta_1 - beta_0) / (Block.ancho * 0.9f));
             for (int j = 0; j < cant_j; ++j)
             {
@@ -443,7 +503,9 @@ namespace TGC.Group.Model
                     float x = FastMath.Cos(alfa) * FastMath.Sin(beta);
                     float y = FastMath.Sin(alfa) * FastMath.Sin(beta);
                     float z = FastMath.Cos(beta);
-                    int tipo = Math.Abs(beta - FastMath.PI_HALF) < 0.1 ? 0 : 1+random.Next(0,3);
+                    int tipo = Math.Abs(j- cant_j/2) <2 ?
+                        (l++ % largo) != 0 ? 0 : 1: 
+                        2 + random.Next(0, 6);
                     scene.Add(new Block(new Vector3(x, y, z) * star_r, this,tipo));
                 }
             }
@@ -732,7 +794,6 @@ namespace TGC.Group.Model
                             switch (bloque.tipo)
                             {
                                 case 0:
-                                case 1:
                                     pbox = BlockTrench;
                                     break;
                                 default:
