@@ -29,7 +29,7 @@ namespace TGC.Group.Model
     {
         private static readonly Random random = new Random();
         public static float k = 0.11f ;
-        public static int r = 8;
+        public static int r = 6;
         public static float largo = 10*2*(r+1);
         public static float ancho = 10*2*(r+1);
         public static float alto = 20;
@@ -80,6 +80,7 @@ namespace TGC.Group.Model
             Matrix MatPos = Matrix.Translation(pos);
 
             bool sin_salida = tipo==1?true:false;
+            sin_salida = false;
             bool tunel = sin_salida ? false : random.Next(0, 4) == 0 ? true : false;
             
             // piso y techo
@@ -242,6 +243,11 @@ namespace TGC.Group.Model
 
         public bool render()
         {
+            float dist_lod = tipo <= 1 ? 100000 : 300000;
+            float dist = (Position - model.Camara.Position).LengthSq();
+            if (dist > dist_lod)
+                return false;
+
             var r = TgcCollisionUtils.classifyFrustumAABB(model.Frustum, BoundingBox);
             if (r == TgcCollisionUtils.FrustumResult.OUTSIDE)
                 return false;
@@ -269,6 +275,7 @@ namespace TGC.Group.Model
                 case 2:
                 case 3:
                 case 4:
+                case 5:
                     // surface
                     foreach (TgcMesh mesh in model.surface)
                     {
@@ -323,11 +330,13 @@ namespace TGC.Group.Model
         public TgcArrow ship = new TgcArrow();
         public TgcBox BlockSurface;
         public TgcBox BlockTrench;
+        public TgcBox BlockLOD;
 
         public float star_r = 1500;
         public Vector3 ship_vel = new Vector3(1, 0, 0);
         public float ship_speed = 100;
         public Vector3 ship_pos;
+        public float ship_H;
         public Vector3 cam_vel = new Vector3(0, 0, 0);
         public Vector3 cam_pos = new Vector3(1, 0, 0);
         public Vector3 target_pos = new Vector3(1, 0, 0);
@@ -371,6 +380,7 @@ namespace TGC.Group.Model
             meshes.Add(loader.loadSceneFromFile(MediaDir + "Turbolaser-TgcScene.xml").Meshes[0]);       // 5
             meshes.Add(loader.loadSceneFromFile(MediaDir + "tuberia-TgcScene.xml").Meshes[0]);          // 6
 
+            BlockLOD = TgcBox.fromSize(new Vector3(100, 10, 100), TgcTexture.createTexture(MediaDir + "Textures\\m1.png"));
 
             foreach (TgcMesh mesh in meshes)
             {
@@ -404,14 +414,16 @@ namespace TGC.Group.Model
             Vector3 lookAt;
             if (curr_mode == defines.MODO_GAME)
             {
-                float ship_alfa = 1;
-                float ship_beta = 1.5f;
+                float ship_alfa = 2.75f;
+                float ship_beta = 1.4f;
                 float x = FastMath.Cos(ship_alfa) * FastMath.Sin(ship_beta);
                 float y = FastMath.Sin(ship_alfa) * FastMath.Sin(ship_beta);
                 float z = FastMath.Cos(ship_beta);
                 ship_pos = new Vector3(x, y, z) * (star_r + 20);
                 Vector3 N = ship_pos;
-                N.Normalize();
+                float l = N.Length();
+                N *= (1.0f / l);
+                ship_H = l - star_r;
                 ship_vel = Vector3.Cross(N, new Vector3(0, 1, 0));
                 cam_pos = ship_pos - ship_vel * 100 + N * 20;
                 target_pos = ship_pos;
@@ -454,9 +466,9 @@ namespace TGC.Group.Model
             //Cargar variables de shader de Material. El Material en realidad deberia ser propio de cada mesh. Pero en este ejemplo se simplifica con uno comun para todos
             currentShader.SetValue("materialEmissiveColor", ColorValue.FromColor(Color.FromArgb(0, 0, 0)));
             currentShader.SetValue("materialAmbientColor", ColorValue.FromColor(Color.FromArgb(40, 40, 40)));
-            currentShader.SetValue("materialDiffuseColor", ColorValue.FromColor(Color.FromArgb(180, 180, 180)));
+            currentShader.SetValue("materialDiffuseColor", ColorValue.FromColor(Color.FromArgb(120, 120, 120)));
             currentShader.SetValue("materialSpecularColor", ColorValue.FromColor(Color.FromArgb(240,240,240)));
-            currentShader.SetValue("materialSpecularExp", (float)10);
+            currentShader.SetValue("materialSpecularExp", (float)40);
             currentShader.SetValue("specularFactor", (float)0.7);
 
 
@@ -486,9 +498,8 @@ namespace TGC.Group.Model
 
         public void ArmarBanda(float alfa_0 , float alfa_1 , float beta_0 , float beta_1)
         {
-            int largo = 6;
-            int l = 0;
             float cant_j = (int)(star_r * (beta_1 - beta_0) / (Block.ancho * 0.9f));
+            int mitad_j = (int)(cant_j / 2);
             for (int j = 0; j < cant_j; ++j)
             {
                 float tj = (float)j / (float)cant_j;
@@ -496,6 +507,7 @@ namespace TGC.Group.Model
                 float radio = FastMath.Sin(beta) * star_r;
 
                 float cant_i = (int)(radio * (alfa_1 - alfa_0) / (Block.largo * 0.9f));
+                int mitad_i = (int)(cant_i / 2);
                 for (int i = 0; i < cant_i; ++i)
                 {
                     float ti = (float)i / (float)cant_i;
@@ -503,9 +515,12 @@ namespace TGC.Group.Model
                     float x = FastMath.Cos(alfa) * FastMath.Sin(beta);
                     float y = FastMath.Sin(alfa) * FastMath.Sin(beta);
                     float z = FastMath.Cos(beta);
-                    int tipo = Math.Abs(j- cant_j/2) <2 ?
-                        (l++ % largo) != 0 ? 0 : 1: 
-                        2 + random.Next(0, 6);
+
+                    int tipo = 0;
+                    if (Math.Abs(j - mitad_j) < 2 && Math.Abs(i - mitad_i) < 10)
+                        tipo = 0;
+                    else
+                        tipo = 2 + random.Next(0, 6);
                     scene.Add(new Block(new Vector3(x, y, z) * star_r, this,tipo));
                 }
             }
@@ -561,6 +576,10 @@ namespace TGC.Group.Model
                             dy *= 0.5f;
                         }
                         Vector3 Up = ship_pos;
+                        float l = Up.Length();
+                        Up *= (1.0f / l);
+                        ship_H = l - star_r;
+
                         Up.Normalize();
                         Vector3 tg = Vector3.Cross(Up, ship_vel);
                         Vector3 N = Vector3.Cross(ship_vel, tg);
@@ -753,13 +772,15 @@ namespace TGC.Group.Model
                     {
                         //Render SkyBox
                         skyBox.render();
+                        /*
                         int cant_dibujados = 0;
-                        float dist_lod = 300000;
+                        float dist_lod = 100000;
                         foreach (Block bloque in scene)
                         {
-                            if ((bloque.Position - Camara.Position).LengthSq() < dist_lod)
+                            float ls = (bloque.Position - Camara.Position).LengthSq();
+                            if (ls < dist_lod)
                             {
-                                if (bloque.render())
+                                if (bloque.render(0))
                                     cant_dibujados++;
                             }
                             else
@@ -768,8 +789,18 @@ namespace TGC.Group.Model
                                 //Box.render();
                             }
                         }
-
                         LightBox.render();
+                        */
+
+                        int cant_dibujados = 0;
+                        foreach (Block bloque in scene)
+                        {
+                            if (bloque.render())
+                                cant_dibujados++;
+
+                        }
+
+
                         if (!first_person)
                         {
                             ship.PStart = ship_pos;
@@ -809,7 +840,7 @@ namespace TGC.Group.Model
                     break;
             }
 
-            DrawText.drawText("C->Toogle Camara mode" , 400, 10, Color.Yellow);
+            DrawText.drawText("C->Toogle Camara mode       H =" + ship_H , 400, 10, Color.Yellow);
 
 
 

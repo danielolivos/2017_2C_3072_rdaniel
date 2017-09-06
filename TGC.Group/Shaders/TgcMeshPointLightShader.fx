@@ -239,8 +239,6 @@ float4 ps_DiffuseMap(PS_DIFFUSE_MAP input) : COLOR0
 
 	//Obtener texel de la textura
 	float4 texelColor = tex2D(diffuseMap, input.Texcoord);
-	// toque para no usar texturas
-	//float4 texelColor = materialDiffuseColor;
 
 	//Componente Ambient
 	float3 ambientLight = intensity * lightColor * materialAmbientColor;
