@@ -14,6 +14,7 @@ using TGC.Core.BoundingVolumes;
 using TGC.Core.Collision;
 using System;
 using TGC.Core.Terrain;
+using System.Windows.Forms;
 
 namespace TGC.Group.Model
 {
@@ -23,18 +24,19 @@ namespace TGC.Group.Model
         public const int MODO_CAMARA = 0;
         public const int MODO_GAME = 1;
         public const int MODO_TEST_BLOCK = 2;
-
     }
+
     public class Block
     {
         private static readonly Random random = new Random();
-        public static float k = 0.11f ;
+        public static float k = 0.11f;
         public static int r = 8;
-        public static float largo = 10*2*(r+1);
-        public static float ancho = 10*2*(r+1);
+        public static float largo = 10 * 2 * (r);
+        public static float ancho = 10 * 2 * (r);
         public static float alto = 20;
         public Vector3 Position;
         public Matrix Orient;
+        public Matrix MatPos;
         public Vector3 escale = new Vector3(1, 1.82f, 1) * k;
         public Matrix[] matWorld = new Matrix[500];
         public int[] mesh_index = new int[500];
@@ -44,201 +46,73 @@ namespace TGC.Group.Model
         public Matrix matWorldBock = new Matrix();
         public Matrix matWorldSurfaceBlock = new Matrix();
         public int tipo;
+        public static Matrix OrientTecho = Helper.MatrixfromBasis(1, 0, 0,
+                                                        0, -1, 0,
+                                                        0, 0, 1);
+
+        public static Matrix OrientPared = Helper.MatrixfromBasis(1, 0, 0,
+                                                        0, 0, -1,
+                                                        0, 1, 0);
+
+        public static Matrix OrientParedI = Helper.MatrixfromBasis(1, 0, 0,
+                                                        0, 0, 1,
+                                                        0, 1, 0);
+
+        public static Matrix OrientParedU = Helper.MatrixfromBasis(0, 1, 0,
+                                                     1, 0, 0,
+                                                     0, 0, 1);
+
+        public static Matrix OrientParedD = Helper.MatrixfromBasis(0, 1, 0,
+                                                     -1, 0, 0,
+                                                     0, 0, 1);
 
 
-        public Block(Vector3 pos, GameModel pmodel, int ptipo)
+
+        public Block(Vector3 pos, GameModel pmodel, int ptipo , Matrix OrientBlock)
         {
             model = pmodel;
             tipo = ptipo;
             Position = pos;
-            int prof = 2;       // profundidad del trench
+            Orient = ptipo ==0 ? Helper.CalcularUVN(pos) : Matrix.Identity;
+            MatPos = Matrix.Translation(pos);
 
-            Orient = Helper.CalcularUVN(pos);
-            Matrix OrientTecho = Helper.MatrixfromBasis(1, 0, 0,
-                                                            0, -1, 0,
-                                                            0, 0, 1);
-
-            Matrix OrientPared = Helper.MatrixfromBasis(1, 0, 0,
-                                                            0, 0, -1,
-                                                            0, 1, 0);
-
-            Matrix OrientParedI = Helper.MatrixfromBasis(1, 0, 0,
-                                                            0, 0, 1,
-                                                            0, 1, 0);
-
-            Matrix OrientParedU = Helper.MatrixfromBasis(0, 1, 0,
-                                                         1, 0, 0,
-                                                         0, 0, 1);
-
-            Matrix OrientParedD = Helper.MatrixfromBasis(0, 1, 0,
-                                                         -1, 0, 0,
-                                                         0, 0, 1);
-            Matrix OrientPipeline = Helper.MatrixfromBasis(0, 0, 1,
-                                                         0, 1, 0,
-                                                         1, 0, 0);
-            Matrix OrientTurboLaser = Helper.MatrixfromBasis(-1, 0, 0,
-                                                            0, 1, 0,
-                                                            0, 0, 1);
-
-            Matrix MatPos = Matrix.Translation(pos);
-
-            bool sin_salida = false;            // random.Next(0, 4) == 0 ? true : false;
-            bool tunel = random.Next(0, 4) == 0 ? true : false;
-            
-            // piso y techo
-            int t = 0;
-            if (tunel)
+            switch (ptipo)
             {
-                for (int i = -r; i < r; ++i)
-                {
-                    for (int j = -r; j < r; ++j)
-                        if (i == 0 || i == -1 || j == 0 || j == -1)
-                        {
-                            // piso
-                            matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient *MatPos;
-                            ++t;
+                default:
+                    break;
 
+                case 0:
+                    Block0(OrientBlock);
+                    break;
 
-                            if (i != -r && i != r - 1 && j != -r && j != r - 1)
-                            {
-                                // techo
-                                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10, 10, j * 10)) * Orient * MatPos;
-                                ++t;
-                            }
-                        }
-                }
-            }
-            else
-            {
-                for (int i = -r; i < r; ++i)
-                {
-                    for (int j = -r; j < r; ++j)
-                        if ((i >= -2 && i <= 1) || (j >= -2 && j <= 1))
-                        {
+                case 1:
+                    Block1(OrientBlock);
+                    break;
 
-                            // 1-escalo
-                            matWorld[t] = Matrix.Scaling(escale);
-                            // 2-traslado en el espacio del bloque
-                            if (i == 0 || i == -1 || j == 0 || j == -1)
-                            {
-                                //  piso
-                                matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient;
-                                // 4- traslado a la pos. en world space
-                                matWorld[t] = matWorld[t] * MatPos;
-                                ++t;
-                            }
-                            else
-                            {
-                                //  techo
-                                /*matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, 10, j * 10)) * Orient;
-                                // 4- traslado a la pos. en world space
-                                matWorld[t] = matWorld[t] * MatPos;
-                                ++t;
-                                */
-                            }
+                case 2:
+                    Block2(OrientBlock);
+                    break;
 
+                case 3:
+                    Block3(OrientBlock);
+                    break;
 
-                            }
-
-                        }
-            }
-
-            // pared
-            for (int s = 0; s < prof; ++s)
-            {
-                for (int i = -r; i < r; ++i)
-                    if (i != 0 && i != -1)
-                    {
-
-                        // pared der
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, 5)) * Orient * MatPos;
-                        // pared izq 
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, -15)) * Orient * MatPos;
-                        // pared U
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-15, 5 - 10 * s, i * 10)) * Orient * MatPos;
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5 - 10 * s, i * 10)) * Orient * MatPos;
-                    }
-
-                if (sin_salida)
-                {
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(0, 5 - 10 * s, -10 * r-5)) * Orient * MatPos;
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(-10, 5 - 10 * s, -10 * r-5)) * Orient * MatPos;
-
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(0, 5 - 10 * s, 10 * r-5)) * Orient * MatPos;
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(-10, 5 - 10 * s, 10 * r-5)) * Orient * MatPos;
-
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10 * r - 5, 5 - 10 * s, 0)) * Orient * MatPos;
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10 * r - 5, 5 - 10 * s, -10)) * Orient * MatPos;
-
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10 * r - 5, 5 - 10 * s, 0)) * Orient * MatPos;
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10 * r - 5, 5 - 10 * s, -10)) * Orient * MatPos;
-
-
-
-                }
 
             }
-
-
-            for (int i = 0; i < t; ++i)
-                mesh_index[i] = random.Next(0, 4);
-
-            // agrego los cuadrantes vacios
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, -r * 5 - 10)) * Orient * MatPos;
-            mesh_index[t++] = -1;
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3  , 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5 , 0, -r * 5 - 10)) * Orient * MatPos;
-            mesh_index[t++] = -1;
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, r * 5)) * Orient * MatPos;
-            mesh_index[t++] = -1;
-            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5, 0, r * 5)) * Orient * MatPos;
-            mesh_index[t++] = -1;
-
-            // agrego el pipepeline
-            bool pipeline = false;      // random.Next(0, 5) == 0
-            if (pipeline)
-            {
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
-                    * Matrix.Translation(new Vector3(-2, 6, -30)) * Orient * MatPos;
-                mesh_index[t++] = 6;
-
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
-                    * Matrix.Translation(new Vector3(-2, 9, -32)) * Orient * MatPos;
-                mesh_index[t++] = 6;
-
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
-                    * Matrix.Translation(new Vector3(-2, 0, -32)) * OrientPipeline * Orient * MatPos;
-                mesh_index[t++] = 6;
-            }
-
-            // agrego el turbo laser
-            bool turbolaser = false;
-            if(turbolaser)
-            {
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(1, 0.5f, 1))
-                        * Matrix.Translation(new Vector3(-10 * r + 5, -5, -10)) * Orient * MatPos;
-                mesh_index[t++] = 5;
-
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(1, 0.5f, 1)) * OrientTurboLaser
-                        * Matrix.Translation(new Vector3(-10 * r + 15, -5, 0)) * Orient * MatPos;
-                mesh_index[t++] = 5;
-
-            }
-
-            cant_mesh = t;
             // calculo el bounding box de toto el bloque
             Matrix T = Orient * MatPos;
             Vector3[] p = new Vector3[8];
             float min_x = 10000000, min_y = 10000000, min_z = 10000000;
             float max_x = -10000000, max_y = -10000000, max_z = -10000000;
-            p[0] = new Vector3(-largo / 2, 0, -ancho / 2);
-            p[1] = new Vector3(largo / 2, 0, -ancho / 2);
-            p[2] = new Vector3(largo / 2, alto, -ancho / 2);
-            p[3] = new Vector3(-largo / 2, alto, -ancho / 2);
+            p[0] = new Vector3(-largo / 2, -alto / 2, -ancho / 2);
+            p[1] = new Vector3(largo / 2, -alto / 2, -ancho / 2);
+            p[2] = new Vector3(largo / 2, alto / 2, -ancho / 2);
+            p[3] = new Vector3(-largo / 2, alto / 2, -ancho / 2);
 
-            p[4] = new Vector3(-largo / 2, 0, ancho / 2);
-            p[5] = new Vector3(largo / 2, 0, ancho / 2);
-            p[6] = new Vector3(largo / 2, alto, ancho / 2);
-            p[7] = new Vector3(-largo / 2, alto, ancho / 2);
+            p[4] = new Vector3(-largo / 2, -alto / 2, ancho / 2);
+            p[5] = new Vector3(largo / 2, -alto / 2, ancho / 2);
+            p[6] = new Vector3(largo / 2, alto / 2, ancho / 2);
+            p[7] = new Vector3(-largo / 2, alto / 2, ancho / 2);
 
             for (int i = 0; i < 8; ++i)
             {
@@ -264,86 +138,294 @@ namespace TGC.Group.Model
             // matriz que transforma una mesh list que constituye un block (de 100x100x100) ubicada en orgin y sin orientacion
             matWorldSurfaceBlock = Matrix.Translation(0, 7, 0) * Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
 
+
         }
+
+        public void Block0(Matrix OrientBlock)
+        {
+            int prof = 2;       // profundidad del trench
+            // piso y techo
+            int t = 0;
+            for (int i = -r; i < r; ++i)
+            {
+                //  piso
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), -5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+
+                // pared
+                for (int s = 0; s < prof; ++s)
+                {
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, -10)) * OrientBlock * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, 10)) * OrientBlock * Orient * MatPos;
+                }
+            }
+
+
+            for (int i = 0; i < t; ++i)
+                mesh_index[i] = random.Next(0, 5);
+
+            /*  // agrego los cuadrantes vacios
+              matWorld[t] = Matrix.Scaling(new Vector3(20 * r-2, 19, 10 * (r - 1)-2)) * Matrix.Translation(new Vector3(-5, 0, -r * 5 - 5)) * OrientBlock * Orient * MatPos;
+              mesh_index[t++] = -1;
+              matWorld[t] = Matrix.Scaling(new Vector3(20 * r-2, 19, 10 * (r - 1)-2)) * Matrix.Translation(new Vector3(-5 , 0, r * 5 + 5)) * OrientBlock * Orient * MatPos;
+              mesh_index[t++] = -1;
+              */
+
+            cant_mesh = t;
+
+        }
+
+
+        public void Block1(Matrix OrientBlock)
+        {
+            int prof = 2;       // profundidad del trench
+            // piso y techo
+            int t = 0;
+            for (int q = -r; q < r; ++q)
+            {
+                int i, i1, j, j1;
+                if (q <= 0)
+                {
+                    i = i1 = q;
+                    j = -1;
+                    j1 = 0;
+                }
+                else
+                {
+                    j = j1 = q;
+                    i = -1;
+                    i1 = 0;
+                }
+                //  piso
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10 + 5, -10 * (prof - 1), j * 10 + 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i1 * 10 + 5, -10 * (prof - 1), j1 * 10 + 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                //  techo
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10 + 5, 10, j * 10 + 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i1 * 10 + 5, 10, j1 * 10 + 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                // pared
+                for (int s = 0; s < prof; ++s)
+                {
+                    if (q <= 0)
+                    {
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10 + 5, 5 - 10 * s, j * 10)) * OrientBlock * Orient * MatPos;
+                        if (q < -1)
+                            matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i1 * 10 + 5, 5 - 10 * s, j1 * 10 + 10)) * OrientBlock * Orient * MatPos;
+                    }
+                    else
+                    {
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, j * 10 + 5)) * OrientBlock * Orient * MatPos;
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(i1 * 10 + 10, 5 - 10 * s, j1 * 10 + 5)) * OrientBlock * Orient * MatPos;
+                    }
+
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10, 5 - 10 * s, -5)) * OrientBlock * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10, 5 - 10 * s, 5)) * OrientBlock * Orient * MatPos;
+                }
+            }
+
+
+            for (int i = 0; i < t; ++i)
+                mesh_index[i] = random.Next(0, 5);
+
+            cant_mesh = t;
+
+        }
+
+        public void Block2(Matrix OrientBlock)
+        {
+            int prof = 2;       // profundidad del trench
+            // piso y techo
+            int t = 0;
+            for (int i = -r; i < r; ++i)
+            {
+                //  piso
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), -5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                //  techo
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10, 10, 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10, 10, -5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                // pared
+                for (int s = 0; s < prof; ++s)
+                {
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, -10)) * OrientBlock * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, 10)) * OrientBlock * Orient * MatPos;
+                }
+            }
+
+
+            for (int i = 0; i < t; ++i)
+                mesh_index[i] = random.Next(0, 5);
+
+            cant_mesh = t;
+
+        }
+
+
+        public void Block3(Matrix OrientBlock)
+        {
+            int prof = 2;       // profundidad del trench
+            // piso y techo
+            int t = 0;
+            for (int i = -r; i < r; ++i)
+            {
+                //  piso
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10+5, -10 * (prof - 1), 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10+5, -10 * (prof - 1), -5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+
+                
+                //  techo
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10+5, 10, 5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10+5, 10, -5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                
+                // pared
+                if(i!=0 && i!=-1)
+                for (int s = 0; s < prof; ++s)
+                {
+                   matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10+5, 5 - 10 * s, 10)) * OrientBlock * Orient * MatPos;
+                   matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10+5, 5 - 10 * s, -10)) * OrientBlock * Orient * MatPos;
+                }
+            }
+
+            for (int i = -r; i < r; ++i)
+             if (i != 0 && i != -1)
+             {
+                //  piso
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(5, -10 * (prof - 1), i * 10+5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(-5, -10 * (prof - 1), i* 10+5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                
+                //  techo
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(5, 10, i * 10+5)) * OrientBlock * Orient * MatPos;
+                ++t;
+                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(-5, 10, i * 10+5)) * OrientBlock * Orient * MatPos;
+                ++t;
+
+                
+                // pared
+                for (int s = 0; s < prof; ++s)
+                {
+                   matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10, 5 - 10 * s, i * 10+5)) * OrientBlock * Orient * MatPos;
+                   matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10, 5 - 10 * s, i * 10+5)) * OrientBlock * Orient * MatPos;
+                }
+                
+            }
+
+
+            for (int i = 0; i < t; ++i)
+                mesh_index[i] = random.Next(0, 5);
+
+            cant_mesh = t;
+
+        }
+
 
 
         public bool render(String technique)
         {
-            if (model.curr_mode == defines.MODO_GAME)
+           var r = TgcCollisionUtils.classifyFrustumAABB(model.Frustum, BoundingBox);
+            if (r == TgcCollisionUtils.FrustumResult.OUTSIDE)
+                return false;
+            
+            float dist = (Position - model.Camara.Position).LengthSq();
+            if (model.curr_mode == defines.MODO_GAME )
             {
-                float dist_lod = tipo <= 1 ? 150000 : 300000;
-                float dist = (Position - model.Camara.Position).LengthSq();
+                float dist_lod = 250000;
                 if (dist > dist_lod)
                     return false;
             }
 
+
+         
+            for (int i = 0; i < cant_mesh; ++i)
+            {
+                int index = mesh_index[i];
+                if (index != -1)
+                {
+                    if (dist > 20000)
+                        index += 7;
+                    model.effect.SetValue("ssao", 1);
+                    model.meshes[index].Transform = matWorld[i];
+                    model.meshes[index].Technique = technique;
+                    model.meshes[index].render();
+                }
+                else
+                {
+                    model.effect.SetValue("ssao", 0);
+                    model.Box.Transform = matWorld[i];
+                    model.Box.Technique = technique;
+                    model.Box.render();
+                }
+            }
+            if (model.curr_mode == defines.MODO_TEST_BLOCK)
+                BoundingBox.render();
+            return true;
+
+        }
+
+        public bool render()
+        {
             var r = TgcCollisionUtils.classifyFrustumAABB(model.Frustum, BoundingBox);
             if (r == TgcCollisionUtils.FrustumResult.OUTSIDE)
                 return false;
+            
+            float dist = (Position - model.Camara.Position).LengthSq();
 
-            switch(tipo)
+            if (model.curr_mode == defines.MODO_GAME)
             {
-                case 0:
-                case 1:
-                    // trench 
-                    for (int i = 0; i < cant_mesh; ++i)
-                     {
-                        int index = mesh_index[i];
-                        if (index != -1)
-                        {
-                            model.effect.SetValue("ssao", 1);
-                            model.meshes[index].Transform = matWorld[i];
-                            model.meshes[index].Technique = technique;
-                            model.meshes[index].render();
-                        }
-                        else
-                        {
-                            model.effect.SetValue("ssao", 0);
-                            model.Box.Transform = matWorld[i];
-                            model.Box.Technique = technique;
-                            model.Box.render();
-                        }
-                    }
-                    break;
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                    // surface
-                    model.effect.SetValue("ssao", 0);
-                    foreach (TgcMesh mesh in model.surface)
-                    {
-                        mesh.Transform = matWorldSurfaceBlock;
-                        mesh.Technique = technique;
-                        mesh.render();
-                    }
-                    break;
-                default:
-                    model.effect.SetValue("ssao", 0);
-                    model.Box.Transform = matWorldBock;
-                    model.Box.Technique = technique;
-                    model.Box.render();
-                    break;
+                float dist_lod = 500000;
+                if (dist > dist_lod)
+                    return false;
             }
 
-            if (model.curr_mode == defines.MODO_TEST_BLOCK)
-                BoundingBox.render();
 
+            // trench 
+            for (int i = 0; i < cant_mesh; ++i)
+            {
+                int index = mesh_index[i];
+                if (index != -1)
+                {
+                    //if (dist > 20000)
+                    //    index += 7;
+                    model.meshes[index].Transform = matWorld[i];
+                    TgcShaders.Instance.setShaderMatrix(model.effect, matWorld[i]);
+                    model.effect.CommitChanges();
+                    model.meshes[index].D3dMesh.DrawSubset(0);
+
+                }
+            }
             return true;
         }
+    }
 
-
-
-
-        }
-
-        /// <summary>
-        ///     Ejemplo para implementar el TP.
-        ///     Inicialmente puede ser renombrado o copiado para hacer más ejemplos chicos, en el caso de copiar para que se
-        ///     ejecute el nuevo ejemplo deben cambiar el modelo que instancia GameForm <see cref="Form.GameForm.InitGraphics()" />
-        ///     line 97.
-        /// </summary>
-        public class GameModel : TgcExample
+    /// <summary>
+    ///     Ejemplo para implementar el TP.
+    ///     Inicialmente puede ser renombrado o copiado para hacer más ejemplos chicos, en el caso de copiar para que se
+    ///     ejecute el nuevo ejemplo deben cambiar el modelo que instancia GameForm <see cref="Form.GameForm.InitGraphics()" />
+    ///     line 97.
+    /// </summary>
+    public class GameModel : TgcExample
     {
         /// <summary>
         ///     Constructor del juego.
@@ -358,9 +440,11 @@ namespace TGC.Group.Model
         }
 
 
+        //public int curr_mode = defines.MODO_CAMARA;
         //public int curr_mode = defines.MODO_TEST_BLOCK;
         public int curr_mode = defines.MODO_GAME;
         public bool first_person = false;
+        public bool camara_ready = false;
 
         public TgcBox Box { get; set; }
         public List<TgcMesh> meshes = new List<TgcMesh>();
@@ -371,32 +455,36 @@ namespace TGC.Group.Model
         public TgcBox BlockTrench;
         public TgcBox LODMesh;
 
-        public float star_r = 1500;
-        public Vector3 ship_vel = new Vector3(1, 0, 0);
-        public float ship_speed = 100;
-        public Vector3 ship_pos;
+        public float star_r = 8000;
+        public Vector3 ship_vel;
         public Vector3 ship_N;
         public Vector3 ship_bitan;
+        public float ship_speed;
+        public Vector3 ship_pos;
         public float ship_an = 0;
         public float ship_H;
         public Vector3 cam_vel = new Vector3(0, 0, 0);
         public Vector3 cam_pos = new Vector3(1, 0, 0);
         public Vector3 target_pos = new Vector3(1, 0, 0);
         public List<Block> scene = new List<Block>();
-        public TgcBox LightBox;
-        public TgcMesh skyBox;
+        public List<Block> trench = new List<Block>();
         private static readonly Random random = new Random();
 
         public Effect effect;
         public Surface g_pDepthStencil; // Depth-stencil buffer
-        public Texture g_pRenderTarget , g_pPosition , g_pNormal;
+        public Texture g_pRenderTarget, g_pPosition, g_pNormal;
         public VertexBuffer g_pVBV3D;
+        public Texture textura_bloques;
 
         public float time = 0;
+        public bool jump_trench = false;
+
 
         //Boleano para ver si dibujamos el boundingbox
         private bool BoundingBox { get; set; }
 
+        public bool mouseCaptured;
+        public Point mouseCenter;
         public float xm, ym;     // pos del mouse
         public float wm;
         public int eventoInterno = 0;
@@ -412,6 +500,14 @@ namespace TGC.Group.Model
             // pos. la camara
             InitCamara();
             // el input del mouse
+            // para capturar el mouse
+            var focusWindows = D3DDevice.Instance.Device.CreationParameters.FocusWindow;
+            mouseCenter = focusWindows.PointToScreen(new Point(focusWindows.Width / 2, focusWindows.Height / 2));
+            mouseCaptured = false;
+            Cursor.Position = mouseCenter;
+            //            Cursor.Hide();
+
+
             xm = Input.Xpos;
             ym = Input.Ypos;
             wm = Input.WheelPos;
@@ -423,6 +519,7 @@ namespace TGC.Group.Model
             //Device de DirectX para crear primitivas.
             var d3dDevice = D3DDevice.Instance.Device;
             var textura_surface = TgcTexture.createTexture(MediaDir + "Textures\\ds_surface.png");
+            effect.SetValue("texDeathStarSurface", textura_surface.D3dTexture);
             Box = TgcBox.fromSize(new Vector3(1, 1, 1), textura_surface);
             Box.Position = new Vector3(0, 0, 0);
             Box.Effect = effect;
@@ -442,6 +539,11 @@ namespace TGC.Group.Model
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m5-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "Turbolaser-TgcScene.xml").Meshes[0]);       // 5
             meshes.Add(loader.loadSceneFromFile(MediaDir + "tuberia-TgcScene.xml").Meshes[0]);          // 6
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "x1-TgcScene.xml").Meshes[0]);               // 7
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "x2-TgcScene.xml").Meshes[0]);               // 8
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "x3-TgcScene.xml").Meshes[0]);               // 9
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "x4-TgcScene.xml").Meshes[0]);               // 10
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "x5-TgcScene.xml").Meshes[0]);               // 11
 
             LODMesh = TgcBox.fromSize(meshes[0].BoundingBox.calculateSize(),
                         TgcTexture.createTexture(MediaDir + "Textures\\m1.jpg"));
@@ -475,20 +577,23 @@ namespace TGC.Group.Model
 
             if (curr_mode == defines.MODO_TEST_BLOCK)
             {
-                scene.Add(new Block(new Vector3(0, 100, 0), this, 0));
+                //scene.Add(new Block(new Vector3(0, 100, 0), this, 0));
+                ArmarTrench();
+                //ArmarEcuatorialTrench();
             }
             else
             {
-                ArmarBanda(0, 2 * FastMath.PI, 0, FastMath.PI);
+                //ArmarBanda(0, 2 * FastMath.PI, 0, FastMath.PI );
+                ArmarTrench();
+                ArmarEcuatorialTrench();
             }
 
-            //Crear SkyBox
-            skyBox = loader.loadSceneFromFile(MediaDir + "GeodesicSphere02-TgcScene.xml").Meshes[0];
-            skyBox.Effect = effect;
-            skyBox.Technique = "SkyBox";
-            skyBox.AutoTransformEnable = false;
-            skyBox.Transform = Matrix.Scaling(new Vector3(10,10,10));
-            
+
+
+            var textura_skybox = TgcTexture.createTexture(MediaDir + "Textures\\Color A05.png");
+            effect.SetValue("texSkybox", textura_skybox.D3dTexture);
+            textura_bloques = TgcTexture.createTexture(MediaDir + "Textures\\4.png").D3dTexture;
+
 
         }
 
@@ -498,47 +603,43 @@ namespace TGC.Group.Model
             Vector3 lookAt;
             if (curr_mode == defines.MODO_GAME)
             {
-                float ship_alfa = 2.75f;
-                float ship_beta = 1.4f;
-                float x = FastMath.Cos(ship_alfa) * FastMath.Sin(ship_beta);
-                float y = FastMath.Sin(ship_alfa) * FastMath.Sin(ship_beta);
-                float z = FastMath.Cos(ship_beta);
-                ship_pos = new Vector3(x, y, z) * (star_r + 20);
-                Vector3 N = ship_pos;
-                float l = N.Length();
-                N *= (1.0f / l);
-                ship_H = l - star_r;
-                ship_vel = Vector3.Cross(N, new Vector3(0, 1, 0));
-                ship_vel.Normalize();
-                cam_pos = ship_pos - ship_vel * 100 + N * 20;
-                target_pos = ship_pos;
-
-                if (!first_person)
-                {
-                    Vector3 bitan = Vector3.Cross(N, ship_vel);
-                    bitan.Normalize();
-                    Vector3 tg = Vector3.Cross(N, bitan);
-                    tg.Normalize();
-                    Vector3 surface_vel = bitan * Vector3.Dot(ship_vel, bitan) + tg * Vector3.Dot(ship_vel, tg);
-                    surface_vel.Normalize();
-                    Camara.SetCamera(ship_pos - surface_vel * 50 + 20 * N, ship_pos + N * 10);
-                }
-
-
+                ship_pos = new Vector3(0, 0, 50000);
+                ship_vel = new Vector3(0, 0, -1);
+                ship_N = new Vector3(0, 1, 0);
+                ship_bitan = new Vector3(1, 0, 0);
+                ship_speed = 15000;
             }
             else
             {
                 if (curr_mode == defines.MODO_TEST_BLOCK)
                 {
-                    cameraPosition = new Vector3(0, 140, 200);
-                    lookAt = new Vector3(0, 0, 0);
+                    Vector3 pmin = new Vector3(10000, 10000, 10000);
+                    Vector3 pmax = new Vector3(-10000, -10000, -10000);
+                    foreach (Block bloque in scene)
+                    {
+                        if (bloque.BoundingBox.PMin.X < pmin.X)
+                            pmin.X = bloque.BoundingBox.PMin.X;
+                        if (bloque.BoundingBox.PMin.Y < pmin.Y)
+                            pmin.Y = bloque.BoundingBox.PMin.Y;
+                        if (bloque.BoundingBox.PMin.Z < pmin.Z)
+                            pmin.Z = bloque.BoundingBox.PMin.Z;
+
+                        if (bloque.BoundingBox.PMax.X > pmax.X)
+                            pmax.X = bloque.BoundingBox.PMax.X;
+                        if (bloque.BoundingBox.PMax.Y > pmax.Y)
+                            pmax.Y = bloque.BoundingBox.PMax.Y;
+                        if (bloque.BoundingBox.PMax.Z > pmax.Z)
+                            pmax.Z = bloque.BoundingBox.PMax.Z;
+                    }
+                    lookAt = (pmin + pmax)*0.5f;
+                    cameraPosition = lookAt + new Vector3(1000,500,0);
                 }
                 else
                 {
-                    cameraPosition = new Vector3(0, 0, 10000);
+                    cameraPosition = new Vector3(10000, 2000, 0);
                     lookAt = new Vector3(0, 0, 0);
                 }
-                Camara.SetCamera(cameraPosition, lookAt);
+                Camara.SetCamera(cameraPosition, lookAt , new Vector3(0,1,0));
             }
 
         }
@@ -550,7 +651,7 @@ namespace TGC.Group.Model
             var d3dDevice = D3DDevice.Instance.Device;
             //Cargar Shader personalizado
             string compilationErrors;
-            effect = Effect.FromFile(d3dDevice, ShadersDir + "starwars.fx", null, null, ShaderFlags.PreferFlowControl,
+            effect = Effect.FromFile(d3dDevice, ShadersDir + "starwars.fxo", null, null, ShaderFlags.PreferFlowControl,
                 null, out compilationErrors);
             if (effect == null)
             {
@@ -582,11 +683,11 @@ namespace TGC.Group.Model
 
             CustomVertex.PositionTextured[] vertices =
             {
-                new CustomVertex.PositionTextured(-1, 1, 1, 0, 0),
-                new CustomVertex.PositionTextured(1, 1, 1, 1, 0),
-                new CustomVertex.PositionTextured(-1, -1, 1, 0, 1),
-                new CustomVertex.PositionTextured(1, -1, 1, 1, 1)
-            };
+            new CustomVertex.PositionTextured(-1, 1, 1, 0, 0),
+            new CustomVertex.PositionTextured(1, 1, 1, 1, 0),
+            new CustomVertex.PositionTextured(-1, -1, 1, 0, 1),
+            new CustomVertex.PositionTextured(1, -1, 1, 1, 1)
+        };
             //vertex buffer de los triangulos
             g_pVBV3D = new VertexBuffer(typeof(CustomVertex.PositionTextured),
                 4, d3dDevice, Usage.Dynamic | Usage.WriteOnly,
@@ -604,7 +705,7 @@ namespace TGC.Group.Model
         {
             Vector3 dir = new Vector3(0, -600, 300);
             dir.Normalize();
-            Vector3 LP = curr_mode == defines.MODO_TEST_BLOCK ? new Vector3(0, 150, 0) : dir* 10000;
+            Vector3 LP = curr_mode == defines.MODO_TEST_BLOCK ? new Vector3(0, 150, 0) : dir * 10000;
             Vector3 LightDir = LP;
             LightDir.Normalize();
             //Cargar variables shader de la luz
@@ -622,14 +723,26 @@ namespace TGC.Group.Model
             effect.SetValue("materialSpecularColor", ColorValue.FromColor(Color.FromArgb(240, 204, 155)));
             effect.SetValue("materialSpecularExp", (float)40);
             effect.SetValue("specularFactor", (float)1.3);
-
-            LightBox = TgcBox.fromSize(LP, curr_mode == defines.MODO_TEST_BLOCK ? new Vector3(10, 10, 10) : new Vector3(100, 100, 100));
-            LightBox.AutoTransformEnable = true;
-
         }
 
 
-        public void ArmarBanda(float alfa_0 , float alfa_1 , float beta_0 , float beta_1)
+        public void ArmarEcuatorialTrench()
+        {
+            float alfa_0 = -0.3f;
+            float alfa_1 = 0.3f;
+            float cant_i = (int)(star_r * (alfa_1 - alfa_0) / (Block.largo * 0.8f));
+            for (int i = 0; i < cant_i; ++i)
+            {
+                float ti = i / cant_i;
+                float alfa = alfa_0 * (1 - ti) + alfa_1 * ti;
+                float x = FastMath.Cos(alfa);
+                float y = FastMath.Sin(alfa);
+                scene.Add(new Block(new Vector3(0, y, x) * (star_r-10), this, 0 , Matrix.Identity));
+            }
+        }
+
+
+        public void ArmarBanda(float alfa_0, float alfa_1, float beta_0, float beta_1)
         {
             float cant_j = (int)(star_r * (beta_1 - beta_0) / (Block.ancho * 0.8f));
             int mitad_j = (int)(cant_j / 2);
@@ -651,38 +764,108 @@ namespace TGC.Group.Model
                     float z = FastMath.Cos(beta);
 
                     int tipo = 0;
-                    if (Math.Abs(j - mitad_j) < 1.1f && Math.Abs(i - mitad_i) < 10)
-                        tipo = (++k)%3==0 ? 1 : 0;
+                    if (Math.Abs(j - mitad_j) < 0.5f)
+                        tipo = 0;
                     else
-                        tipo = 2 + random.Next(0, 6);
-                    scene.Add(new Block(new Vector3(x, y, z) * star_r, this,tipo));
+                        tipo = 3 + random.Next(0, 6);
+
+                    if (tipo == 0)
+                        scene.Add(new Block(new Vector3(x, y, z) * star_r, this, tipo, Matrix.Identity));
                 }
             }
         }
 
+        public void ArmarTrench()
+        {
+            Vector3 pos = new Vector3(-star_r + 50, 0, 0);
+           
+            ArmarTrenchBlock(pos, Matrix.Identity);
+
+            ArmarTrenchBlock(pos + new Vector3(-Block.largo, 0,-Block.largo),
+                 Helper.MatrixfromBasis(0, 0, 1,
+                                        1, 0, 0,
+                                        0, 1, 0));
+
+            ArmarTrenchBlock(pos + new Vector3(Block.largo, 0, -Block.largo),
+               Helper.MatrixfromBasis(0, 0, 1,
+                                      -1, 0, 0,
+                                      0, 1, 0));
+                                      
+
+        }
+
+        public void ArmarTrenchBlock(Vector3 pos, Matrix T)
+        {
+
+            scene.Add(new Block(pos, this, 1, Helper.MatrixfromBasis(0, 0, 1,
+                                                                        1, 0, 0,
+                                                                        0, 1, 0) * T) );
+            //pos.Z -= Block.largo;
+            pos.X -= Block.largo * T.M31;
+            pos.Y -= Block.largo * T.M32;
+            pos.Z -= Block.largo * T.M33;
+            scene.Add(new Block(pos, this, 3, Helper.MatrixfromBasis(1, 0, 0,
+                                                                        0, 1, 0,
+                                                                        0, 0, 1) * T ));
+            pos.X -= Block.largo * T.M31;
+            pos.Y -= Block.largo * T.M32;
+            pos.Z -= Block.largo * T.M33;
+            scene.Add(new Block(pos, this, 1, Helper.MatrixfromBasis(0, 0, -1,
+                                                                        0, 1, 0,
+                                                                        1, 0, 0) * T));
+
+        }
 
         public override void Update()
         {
             PreUpdate();
 
+            if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.M))
+            {
+                mouseCaptured = !mouseCaptured;
+                if (mouseCaptured)
+                    Cursor.Hide();
+                else
+                    Cursor.Show();
+            }
+
+            if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.T))
+            {
+                ship_pos = new Vector3(-star_r + 50, 0, 0);
+                ship_vel = new Vector3(1, 0, 0);
+                ship_N = new Vector3(0, 1, 0);
+                ship_bitan = new Vector3(0, 0, 1);
+                ship_speed = 50;
+                jump_trench = true;
+            }
+
+            //  if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.S))
+            //     ship_speed = ship_speed < 500 ? 5000 : 100;
+            if(!jump_trench)
+            {
+                float k = FastMath.Clamp((ship_pos.Length() - star_r-1000)  / (50000-star_r), 0, 1);
+                ship_speed = 15000 * k + 100 * (1 - k);
+            }
+
+
             if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.F))
                 first_person = !first_person;
             if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.C))
-            { 
-                curr_mode = (curr_mode+1)%2;
-                if(curr_mode == defines.MODO_CAMARA)
+            {
+                curr_mode = (curr_mode + 1) % 2;
+                if (curr_mode == defines.MODO_CAMARA)
                     Camara.SetCamera(new Vector3(0, 0, star_r * 2), new Vector3(0, 0, 0));
             }
 
             if (Input.buttonDown(TgcD3dInput.MouseButtons.BUTTON_RIGHT))
                 ElapsedTime = 0;
 
-                if (Input.buttonUp(TgcD3dInput.MouseButtons.BUTTON_LEFT) || Input.buttonUp(TgcD3dInput.MouseButtons.BUTTON_MIDDLE))
+            if (Input.buttonUp(TgcD3dInput.MouseButtons.BUTTON_LEFT) || Input.buttonUp(TgcD3dInput.MouseButtons.BUTTON_MIDDLE))
             {
                 eventoInterno = 0;
             }
 
-            if (Input.buttonDown(TgcD3dInput.MouseButtons.BUTTON_LEFT))
+            if (mouseCaptured || Input.buttonDown(TgcD3dInput.MouseButtons.BUTTON_LEFT))
             {
                 if (eventoInterno == 0)
                 {
@@ -692,10 +875,14 @@ namespace TGC.Group.Model
                 }
                 else
                 {
+                    /*
                     float dx = Input.Xpos - xm;
                     float dy = Input.Ypos - ym;
                     xm = Input.Xpos;
                     ym = Input.Ypos;
+                    */
+                    float dx = Input.XposRelative * 10;
+                    float dy = Input.YposRelative * 10;
 
                     if (curr_mode == defines.MODO_GAME)
                     {
@@ -704,19 +891,17 @@ namespace TGC.Group.Model
                             dx *= 0.3f;
                             dy *= 0.5f;
                         }
-                        Vector3 Up = ship_pos;
-                        float l = Up.Length();
-                        Up *= (1.0f / l);
-                        ship_H = l - star_r;
 
-                        Vector3 tg = Vector3.Cross(Up, ship_vel);
-                        Vector3 N = Vector3.Cross(ship_vel, tg);
-                        Matrix rot = Matrix.RotationAxis(N, ElapsedTime * dx);
-                        ship_vel.TransformNormal(rot);
-                        ship_an += ElapsedTime * dx * 1.0f;
+                        Matrix rotN = Matrix.RotationAxis(ship_N, ElapsedTime * dx);
+                        ship_vel.TransformNormal(rotN);
+                        ship_bitan.TransformNormal(rotN);
+                        ship_an += ElapsedTime * dx * 5.0f;
                         ship_an = FastMath.Clamp(ship_an, -1, 1);
-                        Matrix rotY = Matrix.RotationAxis(tg, ElapsedTime * dy);
-                        ship_vel.TransformNormal(rotY);
+
+                        Matrix rotBT = Matrix.RotationAxis(ship_bitan, -ElapsedTime * dy);
+                        ship_vel.TransformNormal(rotBT);
+                        ship_N.TransformNormal(rotBT);
+
                     }
                     else
                     {
@@ -725,7 +910,7 @@ namespace TGC.Group.Model
                         float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftShift) ? 0.05f : 0.5f;
                         float tot_x = 800;
                         float an = dx / tot_x * 2 * FastMath.PI * k;
-                        Matrix T = Matrix.RotationY(an);
+                        Matrix T = Matrix.Translation(-Camara.LookAt) * Matrix.RotationY(an) * Matrix.Translation(Camara.LookAt);
                         Vector3 LF = Camara.Position;
                         LF.TransformCoordinate(T);
 
@@ -733,11 +918,11 @@ namespace TGC.Group.Model
                         ViewDir.Normalize();
 
                         Vector3 N;
-                         N = Vector3.Cross(new Vector3(0, 1, 0) , ViewDir);
+                        N = Vector3.Cross(new Vector3(0, 1, 0), ViewDir);
 
                         float tot_y = 600;
-                        float an_y = dy / tot_y * FastMath.PI * k ;
-                        LF = Helper.rotar(LF , Camara.LookAt, N, an_y);
+                        float an_y = dy / tot_y * FastMath.PI * k;
+                        LF = Helper.rotar(LF, Camara.LookAt, N, an_y);
 
                         Camara.SetCamera(LF, Camara.LookAt);
 
@@ -745,6 +930,9 @@ namespace TGC.Group.Model
                     }
                 }
             }
+
+            if (mouseCaptured)
+                Cursor.Position = mouseCenter;
 
 
             if (Input.buttonDown(TgcD3dInput.MouseButtons.BUTTON_MIDDLE))
@@ -762,9 +950,9 @@ namespace TGC.Group.Model
                     xm = Input.Xpos;
                     ym = Input.Ypos;
 
-                    float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftControl) ? 0.1f : 1f;
+                    float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftControl) ? 0.5f : 1f;
 
-                    Vector3 VUP = new Vector3(0,1,0);
+                    Vector3 VUP = new Vector3(0, 1, 0);
                     Vector3 d = Camara.LookAt - Camara.Position;
                     float dist = d.Length();
                     // mido la pantalla en el plano donde esta el LookAt
@@ -775,17 +963,17 @@ namespace TGC.Group.Model
                     float kx = 2 * FastMath.Tan(fov / 2) * dist * aspect / Width * k;
                     float ky = 2 * FastMath.Tan(fov / 2) * dist / Height * k;
                     d.Normalize();
-                    Vector3 n = Vector3.Cross(d , VUP);
+                    Vector3 n = Vector3.Cross(d, VUP);
                     n.Normalize();
                     Vector3 up = Vector3.Cross(n, d);
                     Vector3 desf = up * (dy * ky) + n * (dx * kx);
-                    Camara.SetCamera(Camara.Position + desf, Camara.LookAt+desf);
+                    Camara.SetCamera(Camara.Position + desf, Camara.LookAt + desf);
                 }
             }
 
             float zDelta = Input.WheelPos;
             wm = Input.WheelPos;
-            if(FastMath.Abs(zDelta)>0.1f)
+            if (FastMath.Abs(zDelta) > 0.1f)
             {
                 float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftShift) ? 10 : 100;
                 Vector3 LF = Camara.Position;
@@ -805,36 +993,16 @@ namespace TGC.Group.Model
                 Camara.SetCamera(LF, Camara.LookAt);
             }
 
+
+
             if (curr_mode == defines.MODO_GAME)
             {
-                if (ElapsedTime < 10)
+                if (ElapsedTime > 0 && ElapsedTime < 10)
                 {
                     float k = Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftShift) ? 1 : 0.4f;
                     Vector3 ant_ship_pos = ship_pos;
-                    ship_pos = ship_pos + ship_vel * ElapsedTime*ship_speed*k;
-                    Vector3 N = ship_pos;
-                    float dist = N.Length();
-                    float dist_min = star_r - 10;
-                    float dist_max = star_r + 50;
-                    N.Normalize();
-                    ship_bitan = Vector3.Cross(N, ship_vel);
-                    Vector3 tg = Vector3.Cross(N, ship_bitan);
-                    ship_N = Vector3.Cross(ship_vel, ship_bitan);
-                    Vector3 surface_vel = ship_bitan * Vector3.Dot(ship_vel, ship_bitan) + tg * Vector3.Dot(ship_vel, tg);
-                    surface_vel.Normalize();
-
-                    if (dist < dist_min)
-                    {
-                        ship_pos = N * dist_min;
-                        ship_vel = surface_vel;
-                    }
-                    else
-                    if (dist > dist_max)
-                    {
-                        ship_pos = N * dist_max;
-                        ship_vel = surface_vel;
-                    }
-
+                    ship_pos = ship_pos + ship_vel * ElapsedTime * ship_speed * k;
+                    
                     if (ship_an != 0)
                     {
                         ship_an -= ElapsedTime * 1.5f * Math.Sign(ship_an);
@@ -846,7 +1014,7 @@ namespace TGC.Group.Model
                     {
                         Vector3 pvision = ship_pos + ship_vel * 200;
                         pvision.Normalize();
-                        Camara.SetCamera(ship_pos, pvision * star_r + N * 10, N);
+                        Camara.SetCamera(ship_pos, pvision * star_r + ship_N * 10, ship_N);
                     }
                     else
                     {
@@ -854,30 +1022,44 @@ namespace TGC.Group.Model
                         Vector3 ViewDir = Camara.LookAt - Camara.Position;
                         float cam_dist = ViewDir.Length();
                         ViewDir.Normalize();
-                        Vector3 desired_LF = ship_pos - surface_vel * 5 + N * 1.8f;
-                        Vector3 desired_LA = ship_pos + N * 2.0f;
-                        //Vector3 desired_LF = ship_pos - surface_vel * 3.1f + N * 2.1f;
-                        //Vector3 desired_LA = ship_pos + N * 2.0f;
+                        Vector3 desired_LF = ship_pos - ship_vel * 10 + ship_N * 1.8f;
+                        Vector3 desired_LA = ship_pos + ship_N * 2.0f;
 
-                        Vector3 desired_ViewDir = desired_LA - desired_LF;
-                        desired_ViewDir.Normalize();
+                        if (ship_speed < 101 && !jump_trench)
+                        {
+                            Vector3 desired_ViewDir = desired_LA - desired_LF;
+                            desired_ViewDir.Normalize();
 
-                        float st = .3f;
-                        Quaternion q0 = new Quaternion(ViewDir.X, ViewDir.Y, ViewDir.Z, 0);
-                        Quaternion q1 = new Quaternion(desired_ViewDir.X, desired_ViewDir.Y, desired_ViewDir.Z, 0);
-                        Quaternion qf = Quaternion.Slerp(q0, q1, st);
-                        Vector3 qViewDir = new Vector3(qf.X, qf.Y, qf.Z);
-                        //float KE = 45.0f;      // elasticidad
-                        //float KA = 10.0f;      // amortiguacion
-                        float KE = 125.0f;      // elasticidad
-                        float KA = 20.0f;      // amortiguacion
-                        var displacement = Camara.Position - desired_LF;
-                        var springAcceleration = -KE * displacement - KA * cam_vel;
-                        cam_vel += springAcceleration * ElapsedTime;
-                        LF = Camara.Position + cam_vel * ElapsedTime;
-                        LA = LF + qViewDir * cam_dist;
-                        Camara.SetCamera(LF, LA, N);
-                        //Camara.SetCamera(desired_LF, desired_LA, N);
+                            float st = 0.03f;
+                            Quaternion q0 = new Quaternion(ViewDir.X, ViewDir.Y, ViewDir.Z, 0);
+                            Quaternion q1 = new Quaternion(desired_ViewDir.X, desired_ViewDir.Y, desired_ViewDir.Z, 0);
+                            Quaternion qf = Quaternion.Slerp(q0, q1, st);
+                            Vector3 qViewDir = new Vector3(qf.X, qf.Y, qf.Z);
+                            float KE = 250.0f;      // elasticidad
+                            float KA = 50.0f;      // amortiguacion
+                            var displacement = Camara.Position - desired_LF;
+                            var springAcceleration = -KE * displacement - KA * cam_vel;
+                            cam_vel += springAcceleration * ElapsedTime;
+                            LF = Camara.Position + cam_vel * ElapsedTime;
+
+                            //LF = Camara.Position - displacement * 0.05f;
+                            LA = LF + qViewDir * cam_dist;
+
+                            if (camara_ready)
+                            {
+                                Camara.SetCamera(LF, LA, ship_N);
+                            }
+                            else
+                            {
+                                camara_ready = true;
+                                Camara.SetCamera(desired_LF, desired_LA, ship_N);
+                                cam_vel = Vector3.Empty;
+                            }
+                        }
+                        else
+                        {
+                            Camara.SetCamera(desired_LF, desired_LA, ship_N);
+                        }
                         UpdateView();
 
                     }
@@ -887,11 +1069,11 @@ namespace TGC.Group.Model
 
         }
 
+
+        
         public override void Render()
         {
             var device = D3DDevice.Instance.Device;
-            ClearTextures();
-
             // lighting pass 
             var pOldRT = device.GetRenderTarget(0);
             var pOldDS = device.DepthStencilSurface;
@@ -901,10 +1083,51 @@ namespace TGC.Group.Model
             device.DepthStencilSurface = g_pDepthStencil;
             device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
             device.BeginScene();
+
+            if (curr_mode != defines.MODO_TEST_BLOCK)
+            {
+                // dibujo el quad pp dicho :
+                effect.Technique = "DeathStar";
+                device.VertexFormat = CustomVertex.PositionTextured.Format;
+                device.SetStreamSource(0, g_pVBV3D, 0);
+                Vector3 ViewDir = Camara.LookAt - Camara.Position;
+                ViewDir.Normalize();
+
+                Vector3 Up = curr_mode == defines.MODO_CAMARA ? new Vector3(0, 1, 0) : ship_N;
+                Vector3 U, V;
+                V = Vector3.Cross(ViewDir, Up);
+                V.Normalize();
+                U = Vector3.Cross(V, ViewDir);
+                U.Normalize();
+
+                float fov = D3DDevice.Instance.FieldOfView;
+                float W = device.PresentationParameters.BackBufferWidth;
+                float H = device.PresentationParameters.BackBufferHeight;
+                float k = 2 * FastMath.Tan(fov / 2) / H;
+                Vector3 Dy = U * k;
+                Vector3 Dx = V * k;
+                float Zn = D3DDevice.Instance.ZNearPlaneDistance;
+                float Zf = D3DDevice.Instance.ZFarPlaneDistance;
+                float Q = Zf / (Zf - Zn);
+
+                effect.SetValue("LookFrom", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
+                effect.SetValue("ViewDir", TgcParserUtils.vector3ToFloat4Array(ViewDir));
+                effect.SetValue("Dx", TgcParserUtils.vector3ToFloat4Array(Dx));
+                effect.SetValue("Dy", TgcParserUtils.vector3ToFloat4Array(Dy));
+                effect.SetValue("MatProjQ", Q);
+                effect.SetValue("Zn", Zn);
+                effect.SetValue("Zf", Zf);
+
+                effect.Begin(FX.None);
+                effect.BeginPass(0);
+                device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
+                effect.EndPass();
+                effect.End();
+            }
+
             RenderScene("DefaultTechnique");
             device.EndScene();
             pSurf.Dispose();
-
 
             /*
             pSurf = g_pPosition.GetSurfaceLevel(0);
@@ -956,23 +1179,35 @@ namespace TGC.Group.Model
                     DrawText.drawText("TEST BLOCK", 700, 30, Color.Yellow);
                     break;
                 case defines.MODO_GAME:
-                    {
-                        Vector3 dif = Camara.Position - ship_pos;
-                        DrawText.drawText("Dif: " + dif.X + "," + dif.Y + "," + dif.Z, 5, 20, Color.Yellow);
-                    }
+                    DrawText.drawText("ship_pos: " + ship_pos.X + "," + ship_pos.Y + "," + ship_pos.Z, 5, 20, Color.Yellow);
+                    DrawText.drawText("ship_spped: " + ship_speed, 5, 40, Color.Yellow);
                     DrawText.drawText("F -> toogle first person", 700, 20, Color.Yellow);
                     DrawText.drawText("GAME MODE    (shift accel)", 700, 30, Color.Yellow);
                     break;
                 case defines.MODO_CAMARA:
                 default:
-                    DrawText.drawText("CAMARA MODE   (shift mas lenta)", 700, 30, Color.Yellow);
+                    DrawText.drawText("CAm pos: " + Camara.Position.X + "," + Camara.Position.Y + "," + Camara.Position.Z, 5, 20, Color.Yellow);
                     break;
             }
-            DrawText.drawText("C->Toogle Camara mode       H =" + ship_H , 400, 10, Color.Yellow);
+            DrawText.drawText("C->Toogle Camara mode       H =" + ship_H, 400, 10, Color.Yellow);
 
             RenderFPS();
             device.EndScene();
             device.Present();
+        }
+
+        public void RenderBloques()
+        {
+            effect.SetValue("texDiffuseMap", textura_bloques);
+            effect.SetValue("ssao", 1);
+            effect.Begin(0);
+            effect.BeginPass(0);
+            foreach (Block bloque in scene)
+            {
+                bloque.render();
+            }
+            effect.EndPass();
+            effect.End();
         }
 
 
@@ -980,94 +1215,37 @@ namespace TGC.Group.Model
         {
             var device = D3DDevice.Instance.Device;
             effect.SetValue("eyePosition", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
-            switch (curr_mode)
+            effect.Technique = technique;
+            
+            // los bloques los dibuja siempre
+            RenderBloques();
+
+            if(curr_mode== defines.MODO_GAME && !first_person)
             {
-                case defines.MODO_TEST_BLOCK:
-                    scene[0].render(technique);
-                    //Box.Transform = scene[0].matWorldBock;
-                    //Box.render();
-                    Vector3 Q = Camara.Position;
-                    break;
-                case defines.MODO_GAME:
-                    {
-                        //Render SkyBox
-                        skyBox.Transform = Matrix.Scaling(new Vector3(9000, 9000, 9000)) * Matrix.Translation(Camara.Position);
-                        skyBox.render();
+                /*
+                ship.PStart = ship_pos;
+                ship.PEnd = ship_pos + ship_vel * 5;
+                ship.updateValues();
+                ship.render();
+                */
 
-                        int cant_dibujados = 0;
-                        foreach (Block bloque in scene)
-                        {
-                            if (bloque.render(technique))
-                                cant_dibujados++;
+                // render ship
+                Matrix O = Helper.MatrixfromBasis(
+                                        1, 0, 0,
+                                        0, 0, 1,
+                                        0, 1, 0
+                                        );
+                if (ship_an != 0)
+                    O = O * Matrix.RotationX(ship_an);
 
-                        }
-                        if (!first_person)
-                        {
-                            /*
-                            ship.PStart = ship_pos;
-                            ship.PEnd = ship_pos + ship_vel * 5;
-                            ship.updateValues();
-                            ship.render();
-                            */
-
-                            Matrix O = Helper.MatrixfromBasis(
-                                                    1, 0, 0,
-                                                    0, 0, 1,
-                                                    0, 1, 0
-                                                    );
-                            if (ship_an != 0)
-                                O = O * Matrix.RotationX(ship_an);
-
-                            Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(0.02f, 0.02f, 0.02f), ship_vel, ship_bitan, ship_N);
-                            foreach (TgcMesh mesh in xwing)
-                            {
-                                mesh.Transform = T;
-                                mesh.Technique = technique;
-                                mesh.render();
-                            }
-                        }
-                    }
-                    break;
-                case defines.MODO_CAMARA:
-                default:
-                    {
-
-                        //Render SkyBox
-                        Matrix ant_proj = device.Transform.Projection;
-                        device.Transform.Projection = Matrix.PerspectiveFovLH(D3DDevice.Instance.FieldOfView
-                            , D3DDevice.Instance.AspectRatio, 100, 100000);
-                        skyBox.render();
-                        device.Transform.Projection = ant_proj;
-
-                        // Render Light
-                        LightBox.render();
-
-
-                        /*
-                        foreach (Block bloque in scene)
-                        {
-                            TgcBox pbox;
-                            switch (bloque.tipo)
-                            {
-                                case 0:
-                                case 1:
-                                    pbox = BlockTrench;
-                                    bloque.render(technique);
-                                    break;
-                                default:
-                                    pbox = BlockSurface;
-                                    break;
-
-                            }
-                            //pbox.Transform = bloque.matWorldBock;
-                            //pbox.render();
-                        }
-                        */
-                    }
-                    break;
+                Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(0.02f, 0.02f, 0.02f), ship_vel, ship_bitan, ship_N);
+                foreach (TgcMesh mesh in xwing)
+                {
+                    mesh.Transform = T;
+                    mesh.Technique = technique;
+                    mesh.render();
+                }
             }
-
-
 
         }
 
@@ -1079,7 +1257,6 @@ namespace TGC.Group.Model
         public override void Dispose()
         {
             Box.dispose();
-            skyBox.dispose();
             foreach (TgcMesh mesh in meshes)
                 mesh.dispose();
             foreach (TgcMesh mesh in surface)
@@ -1163,7 +1340,7 @@ namespace TGC.Group.Model
         {
             // determino la orientacion
             Dir.Normalize();
-            Vector3 U = Vector3.Cross(new Vector3(0, 0, 1), Dir);
+            Vector3 U = Vector3.Cross(new Vector3(1, 0, 0), Dir);
             if (FastMath.Abs(U.X) < 0.001f && FastMath.Abs(U.Y) < 0.001f && FastMath.Abs(U.Z) < 0.001f)
                 U = Vector3.Cross(new Vector3(0, 1, 0), Dir);
             U.Normalize();
@@ -1193,7 +1370,7 @@ namespace TGC.Group.Model
             return Orientacion;
         }
 
-        static public Matrix CalcularUVN(Vector3 Dir,Vector3 Up)
+        static public Matrix CalcularUVN(Vector3 Dir, Vector3 Up)
         {
             // determino la orientacion
             Dir.Normalize();
@@ -1226,7 +1403,7 @@ namespace TGC.Group.Model
         }
 
 
-        static public Matrix MatrixfromBasis(   float Ux, float Uy, float Uz,
+        static public Matrix MatrixfromBasis(float Ux, float Uy, float Uz,
                                                 float Vx, float Vy, float Vz,
                                                 float Wx, float Wy, float Wz)
         {
@@ -1272,21 +1449,18 @@ namespace TGC.Group.Model
             yr /= l2;
 
             float zr = c * (u2 + v2) + w * (-a * u - b * v + u * x + v * y + w * z)
-                   + (-c * (u2 + v2) + w * (a * u + b * v - u * x - v * y) + (u2 + v2) * z) * cosT
-                   + l * (-b * u + a * v - v * x + u * y) * sinT;
+                    + (-c * (u2 + v2) + w * (a * u + b * v - u * x - v * y) + (u2 + v2) * z) * cosT
+                    + l * (-b * u + a * v - v * x + u * y) * sinT;
             zr /= l2;
 
             return new Vector3(xr, yr, zr);
         }
-
-
-
-
     }
+}
 
 
 
-    }
+
 
 
 
@@ -1395,3 +1569,437 @@ public BlockImpar(Vector3 pos, GameModel pmodel, int ptipo)
         matWorldBock = Matrix.Translation(0, 7, 0) *
             Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
 }*/
+
+
+/*
+         public Block(Vector3 pos, GameModel pmodel, int ptipo)
+    {
+        model = pmodel;
+        tipo = ptipo;
+        Position = pos;
+        int prof = 2;       // profundidad del trench
+
+        Orient = Helper.CalcularUVN(pos);
+        Matrix OrientTecho = Helper.MatrixfromBasis(1, 0, 0,
+                                                        0, -1, 0,
+                                                        0, 0, 1);
+
+        Matrix OrientPared = Helper.MatrixfromBasis(1, 0, 0,
+                                                        0, 0, -1,
+                                                        0, 1, 0);
+
+        Matrix OrientParedI = Helper.MatrixfromBasis(1, 0, 0,
+                                                        0, 0, 1,
+                                                        0, 1, 0);
+
+        Matrix OrientParedU = Helper.MatrixfromBasis(0, 1, 0,
+                                                     1, 0, 0,
+                                                     0, 0, 1);
+
+        Matrix OrientParedD = Helper.MatrixfromBasis(0, 1, 0,
+                                                     -1, 0, 0,
+                                                     0, 0, 1);
+        Matrix OrientPipeline = Helper.MatrixfromBasis(0, 0, 1,
+                                                     0, 1, 0,
+                                                     1, 0, 0);
+        Matrix OrientTurboLaser = Helper.MatrixfromBasis(-1, 0, 0,
+                                                        0, 1, 0,
+                                                        0, 0, 1);
+
+        Matrix MatPos = Matrix.Translation(pos);
+
+        bool sin_salida = false;            // random.Next(0, 4) == 0 ? true : false;
+        bool tunel = random.Next(0, 4) == 0 ? true : false;
+        tunel = false;
+
+        // piso y techo
+        int t = 0;
+        if (tunel)
+        {
+            for (int i = -r; i < r; ++i)
+            {
+                for (int j = -r; j < r; ++j)
+                    if (i == 0 || i == -1 || j == 0 || j == -1)
+                    {
+                        // piso
+                        matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient *MatPos;
+                        ++t;
+
+
+                        if (i != -r && i != r - 1 && j != -r && j != r - 1)
+                        {
+                            // techo
+                            matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10, 10, j * 10)) * Orient * MatPos;
+                            ++t;
+                        }
+                    }
+            }
+        }
+        else
+        {
+            for (int i = -r; i < r; ++i)
+            {
+                for (int j = -r; j < r; ++j)
+                    if ((i >= -2 && i <= 1) || (j >= -2 && j <= 1))
+                    {
+
+                        // 1-escalo
+                        matWorld[t] = Matrix.Scaling(escale);
+                        // 2-traslado en el espacio del bloque
+                        if (i == 0 || i == -1 || j == 0 || j == -1)
+                        {
+                            //  piso
+                            matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient;
+                            // 4- traslado a la pos. en world space
+                            matWorld[t] = matWorld[t] * MatPos;
+                            ++t;
+                        }
+                        else
+                        {
+                            //  techo
+                            matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, 10, j * 10)) * Orient;
+                            // 4- traslado a la pos. en world space
+                            matWorld[t] = matWorld[t] * MatPos;
+                            ++t;
+                        }
+
+
+                    }
+                }
+        }
+
+        // pared
+        for (int s = 0; s < prof; ++s)
+        {
+            for (int i = -r; i < r; ++i)
+                if (i != 0 && i != -1)
+                {
+
+                    // pared der
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, 5)) * Orient * MatPos;
+                    // pared izq 
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, -15)) * Orient * MatPos;
+                    // pared U
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-15, 5 - 10 * s, i * 10)) * Orient * MatPos;
+                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5 - 10 * s, i * 10)) * Orient * MatPos;
+                }
+
+            if (sin_salida)
+            {
+                matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(0, 5 - 10 * s, -10 * r-5)) * Orient * MatPos;
+                matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(-10, 5 - 10 * s, -10 * r-5)) * Orient * MatPos;
+
+                matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(0, 5 - 10 * s, 10 * r-5)) * Orient * MatPos;
+                matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(-10, 5 - 10 * s, 10 * r-5)) * Orient * MatPos;
+
+                matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10 * r - 5, 5 - 10 * s, 0)) * Orient * MatPos;
+                matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10 * r - 5, 5 - 10 * s, -10)) * Orient * MatPos;
+
+                matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10 * r - 5, 5 - 10 * s, 0)) * Orient * MatPos;
+                matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10 * r - 5, 5 - 10 * s, -10)) * Orient * MatPos;
+
+
+
+            }
+
+        }
+
+
+        for (int i = 0; i < t; ++i)
+            mesh_index[i] = random.Next(0, 5);
+
+        // agrego los cuadrantes vacios
+        matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, -r * 5 - 10)) * Orient * MatPos;
+        mesh_index[t++] = -1;
+        matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3  , 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5 , 0, -r * 5 - 10)) * Orient * MatPos;
+        mesh_index[t++] = -1;
+        matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r * 5 - 10, 0, r * 5)) * Orient * MatPos;
+        mesh_index[t++] = -1;
+        matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r * 5, 0, r * 5)) * Orient * MatPos;
+        mesh_index[t++] = -1;
+
+        // agrego el pipepeline
+        bool pipeline = false;      // random.Next(0, 5) == 0
+        if (pipeline)
+        {
+            matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
+                * Matrix.Translation(new Vector3(-2, 6, -30)) * Orient * MatPos;
+            mesh_index[t++] = 6;
+
+            matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
+                * Matrix.Translation(new Vector3(-2, 9, -32)) * Orient * MatPos;
+            mesh_index[t++] = 6;
+
+            matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(7, 7, 7))
+                * Matrix.Translation(new Vector3(-2, 0, -32)) * OrientPipeline * Orient * MatPos;
+            mesh_index[t++] = 6;
+        }
+
+        // agrego el turbo laser
+        bool turbolaser = false;
+        if(turbolaser)
+        {
+            matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(1, 0.5f, 1))
+                    * Matrix.Translation(new Vector3(-10 * r + 5, -5, -10)) * Orient * MatPos;
+            mesh_index[t++] = 5;
+
+            matWorld[t] = Matrix.Scaling(escale) * Matrix.Scaling(new Vector3(1, 0.5f, 1)) * OrientTurboLaser
+                    * Matrix.Translation(new Vector3(-10 * r + 15, -5, 0)) * Orient * MatPos;
+            mesh_index[t++] = 5;
+
+        }
+
+        cant_mesh = t;
+        // calculo el bounding box de toto el bloque
+        Matrix T = Orient * MatPos;
+        Vector3[] p = new Vector3[8];
+        float min_x = 10000000, min_y = 10000000, min_z = 10000000;
+        float max_x = -10000000, max_y = -10000000, max_z = -10000000;
+        p[0] = new Vector3(-largo / 2, 0, -ancho / 2);
+        p[1] = new Vector3(largo / 2, 0, -ancho / 2);
+        p[2] = new Vector3(largo / 2, alto, -ancho / 2);
+        p[3] = new Vector3(-largo / 2, alto, -ancho / 2);
+
+        p[4] = new Vector3(-largo / 2, 0, ancho / 2);
+        p[5] = new Vector3(largo / 2, 0, ancho / 2);
+        p[6] = new Vector3(largo / 2, alto, ancho / 2);
+        p[7] = new Vector3(-largo / 2, alto, ancho / 2);
+
+        for (int i = 0; i < 8; ++i)
+        {
+            p[i].TransformCoordinate(T);
+            if (p[i].X < min_x)
+                min_x = p[i].X;
+            if (p[i].Y < min_y)
+                min_y = p[i].Y;
+            if (p[i].Z < min_z)
+                min_z = p[i].Z;
+            if (p[i].X > max_x)
+                max_x = p[i].X;
+            if (p[i].Y > max_y)
+                max_y = p[i].Y;
+            if (p[i].Z > max_z)
+                max_z = p[i].Z;
+        }
+        BoundingBox = new TgcBoundingAxisAlignBox(new Vector3(min_x, min_y, min_z), new Vector3(max_x, max_y, max_z));
+
+        // matriz que transforma una caja de 1 x 1 x 1 ubicada en orgin y sin orientacion
+        matWorldBock = Matrix.Scaling(new Vector3(largo, alto, ancho)) * T;
+
+        // matriz que transforma una mesh list que constituye un block (de 100x100x100) ubicada en orgin y sin orientacion
+        matWorldSurfaceBlock = Matrix.Translation(0, 7, 0) * Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
+
+    }
+
+        public bool render(String technique)
+        {
+            if (model.curr_mode == defines.MODO_GAME)
+            {
+                float dist_lod = tipo <= 1 ? 150000 : 300000;
+                float dist = (Position - model.Camara.Position).LengthSq();
+                if (dist > dist_lod)
+                    return false;
+            }
+
+            float dist = (Position - model.Camara.Position).LengthSq();
+
+            var r = TgcCollisionUtils.classifyFrustumAABB(model.Frustum, BoundingBox);
+            if (r == TgcCollisionUtils.FrustumResult.OUTSIDE)
+                return false;
+
+            switch(tipo)
+            {
+                case 0:
+                case 1:
+                    // trench 
+                    for (int i = 0; i < cant_mesh; ++i)
+                     {
+                        int index = mesh_index[i];
+                        if (index != -1)
+                        {
+                            if (dist>20000 )
+                                index += 7;
+                            model.effect.SetValue("ssao", 1);
+                            model.meshes[index].Transform = matWorld[i];
+                            model.meshes[index].Technique = technique;
+                            model.meshes[index].render();
+
+                            //model.effect.SetValue("ssao", 0);
+                            //model.LODMesh.Transform = matWorld[i];
+                            //model.LODMesh.Technique = technique;
+                            //model.LODMesh.render();
+
+                        }
+                        else
+                        {
+                            model.effect.SetValue("ssao", 0);
+                            model.Box.Transform = matWorld[i];
+                            model.Box.Technique = technique;
+                            model.Box.render();
+                        }
+                    }
+                    break;
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                    // surface
+                    model.effect.SetValue("ssao", 0);
+                    foreach (TgcMesh mesh in model.surface)
+                    {
+                        mesh.Transform = matWorldSurfaceBlock;
+                        mesh.Technique = technique;
+                        mesh.render();
+                    }
+                    break;
+                default:
+                    model.effect.SetValue("ssao", 0);
+                    model.Box.Transform = matWorldBock;
+                    model.Box.Technique = technique;
+                    model.Box.render();
+                    break;
+            }
+
+            if (model.curr_mode == defines.MODO_TEST_BLOCK)
+                BoundingBox.render();
+
+            return true;
+        }
+
+
+*/
+
+/*
+ *         public Block(Vector3 pos, GameModel pmodel, int ptipo)
+        {
+            model = pmodel;
+            tipo = ptipo;
+            Position = pos;
+            int prof = 2;       // profundidad del trench
+
+            Orient = Helper.CalcularUVN(pos);
+            Matrix OrientTecho = Helper.MatrixfromBasis(1, 0, 0,
+                                                            0, -1, 0,
+                                                            0, 0, 1);
+
+            Matrix OrientPared = Helper.MatrixfromBasis(1, 0, 0,
+                                                            0, 0, -1,
+                                                            0, 1, 0);
+
+            Matrix OrientParedI = Helper.MatrixfromBasis(1, 0, 0,
+                                                            0, 0, 1,
+                                                            0, 1, 0);
+
+            Matrix OrientParedU = Helper.MatrixfromBasis(0, 1, 0,
+                                                         1, 0, 0,
+                                                         0, 0, 1);
+
+            Matrix OrientParedD = Helper.MatrixfromBasis(0, 1, 0,
+                                                         -1, 0, 0,
+                                                         0, 0, 1);
+            Matrix MatPos = Matrix.Translation(pos);
+
+            // piso y techo
+            int t = 0;
+            for (int i = -r; i < r; ++i)
+            {
+                for (int j = -r; j < r; ++j)
+                    if ((i >= -2 && i <= 1) || (j >= -2 && j <= 1))
+                    {
+
+                        // 1-escalo
+                        matWorld[t] = Matrix.Scaling(escale);
+                        // 2-traslado en el espacio del bloque
+                        if (i == 0 || i == -1 || j == 0 || j == -1)
+                        {
+                            //  piso
+                            matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, -10 * (prof - 1), j * 10)) * Orient;
+                            // 4- traslado a la pos. en world space
+                            matWorld[t] = matWorld[t] * MatPos;
+                            ++t;
+                        }
+                        else
+                        {
+                            //  techo
+                            matWorld[t] = matWorld[t] * Matrix.Translation(new Vector3(i * 10, 10, j * 10)) * Orient;
+                            // 4- traslado a la pos. en world space
+                            matWorld[t] = matWorld[t] * MatPos;
+                            ++t;
+                        }
+                    }
+             }
+
+            // pared
+            for (int s = 0; s<prof; ++s)
+            {
+                for (int i = -r; i<r; ++i)
+                    if (i != 0 && i != -1)
+                    {
+
+                        // pared der
+                        matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i* 10, 5 - 10 * s, 5)) * Orient * MatPos;
+// pared izq 
+matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i* 10, 5 - 10 * s, -15)) * Orient * MatPos;
+// pared U
+matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-15, 5 - 10 * s, i* 10)) * Orient * MatPos;
+matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(5, 5 - 10 * s, i* 10)) * Orient * MatPos;
+                    }
+            }
+
+
+            for (int i = 0; i<t; ++i)
+                mesh_index[i] = random.Next(0, 5);
+
+            // agrego los cuadrantes vacios
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r* 5 - 10, 0, -r* 5 - 10)) * Orient * MatPos;
+mesh_index[t++] = -1;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3  , 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r* 5 , 0, -r* 5 - 10)) * Orient * MatPos;
+mesh_index[t++] = -1;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(-r* 5 - 10, 0, r* 5)) * Orient * MatPos;
+mesh_index[t++] = -1;
+            matWorld[t] = Matrix.Scaling(new Vector3(10 * (r - 1) - 3, 19, 10 * (r - 1) - 3)) * Matrix.Translation(new Vector3(r* 5, 0, r* 5)) * Orient * MatPos;
+mesh_index[t++] = -1;
+
+            cant_mesh = t;
+            // calculo el bounding box de toto el bloque
+            Matrix T = Orient * MatPos;
+Vector3[] p = new Vector3[8];
+float min_x = 10000000, min_y = 10000000, min_z = 10000000;
+float max_x = -10000000, max_y = -10000000, max_z = -10000000;
+p[0] = new Vector3(-largo / 2, 0, -ancho / 2);
+p[1] = new Vector3(largo / 2, 0, -ancho / 2);
+p[2] = new Vector3(largo / 2, alto, -ancho / 2);
+p[3] = new Vector3(-largo / 2, alto, -ancho / 2);
+
+p[4] = new Vector3(-largo / 2, 0, ancho / 2);
+p[5] = new Vector3(largo / 2, 0, ancho / 2);
+p[6] = new Vector3(largo / 2, alto, ancho / 2);
+p[7] = new Vector3(-largo / 2, alto, ancho / 2);
+
+            for (int i = 0; i< 8; ++i)
+            {
+                p[i].TransformCoordinate(T);
+                if (p[i].X<min_x)
+                    min_x = p[i].X;
+                if (p[i].Y<min_y)
+                    min_y = p[i].Y;
+                if (p[i].Z<min_z)
+                    min_z = p[i].Z;
+                if (p[i].X > max_x)
+                    max_x = p[i].X;
+                if (p[i].Y > max_y)
+                    max_y = p[i].Y;
+                if (p[i].Z > max_z)
+                    max_z = p[i].Z;
+            }
+            BoundingBox = new TgcBoundingAxisAlignBox(new Vector3(min_x, min_y, min_z), new Vector3(max_x, max_y, max_z));
+
+            // matriz que transforma una caja de 1 x 1 x 1 ubicada en orgin y sin orientacion
+            matWorldBock = Matrix.Scaling(new Vector3(largo, alto, ancho)) * T;
+
+// matriz que transforma una mesh list que constituye un block (de 100x100x100) ubicada en orgin y sin orientacion
+matWorldSurfaceBlock = Matrix.Translation(0, 7, 0) * Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
+
+        }
+
+*/
