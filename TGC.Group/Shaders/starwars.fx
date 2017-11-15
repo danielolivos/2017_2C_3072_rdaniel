@@ -11,6 +11,7 @@ static const float PI = 3.14159265f;
 int ssao = 1;
 float screen_dx;					// tamaño de la pantalla en pixels
 float screen_dy;
+float time;
 
 
 //Textura para DiffuseMap
@@ -103,6 +104,7 @@ sampler2D SkyBoxMap = sampler_state
 	MAGFILTER = LINEAR;
 	MIPFILTER = LINEAR;
 };
+
 
 
 //Material del mesh
@@ -236,19 +238,6 @@ technique PostProcess
 }
 
 
-VS_OUTPUT vs_skybox(VS_INPUT input)
-{
-	VS_OUTPUT output = (VS_OUTPUT)0;
-	output.Position = mul(input.Position, matWorldViewProj).xyww;
-	//output.Position = mul(input.Position, matWorldViewProj);
-	output.Texcoord = input.Texcoord;
-	output.WorldPosition = mul(input.Position, matWorld);
-	return output;
-}
-
-
-
-
 
 const float star_r = 8000;
 const float r2 = 8000 * 8000;
@@ -378,6 +367,9 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 	float phi = 0 , theta = 0;
 	bool en_reactor = false;
 	
+	const float k_theta = 2400;
+	const float k_phi = 800;
+	
 	if(t>0)
 	{
 		Ip = LookFrom + rd * t;
@@ -403,9 +395,9 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 			
 			float2 tx = round(float2(theta,phi)*1600)/20;
 			float2 ruido = round(tex2D(noise,tx).xy * 256);
-			tx = float2(theta*1600,phi*800) + ruido*0.25;
+			tx = float2(theta*k_theta,phi*k_phi) + ruido*0.25;
 			color_base = tex2D(ds_surface, tx).rgb;
-			
+			color_base *= 1 - (star_r - length(Ip))/45.0;
 		}
 	}
 	else
@@ -416,8 +408,6 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 		Ip = LookFrom;
 	}
 
-	
-	
 	float dty = abs(Ip.y)<100 ? 30 : 15;
 	float dtx = 15;
 	float dq = 400;
@@ -427,21 +417,6 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 	if(trench_x || trench_y)
 		t = 0;
 
-	float4 planet[4] = {float4(15000,0,30000,700) , 
-						float4(-15000,5300,5300,700) ,
-						float4(-15000,-30000,10000,700),
-						float4(-15000,0,0,700)};
-	for(int i=0;i<4;++i)
-	{
-		float t1 = sphere(LookFrom, rd ,planet[i].xyz ,planet[i].w).x;
-		if(t1>0 && (t1<t || t<=0))
-		{
-			t = t1;
-			Ip = LookFrom + rd * t;
-			color_base = float3(0.7,0.75,0.7);
-			N = normalize(Ip);
-		}
-	}
 		
 	for(int k=-5;k<=5;++k)
 	{
@@ -457,8 +432,9 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 				float phi = length(Ip.xz)/star_r;
 				float2 tx = round(float2(theta,phi)*1600)/20;
 				float2 ruido = round(tex2D(noise,tx).xy * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb * 0.5;
+				tx = float2(theta*k_theta,phi*k_phi) + ruido*0.25;
+				color_base = tex2D(ds_surface, tx).rgb;
+				color_base *= 1 - (star_r - length(Ip))/45.0;
 				N = float3(0,1,0);
 			}
 		}
@@ -474,8 +450,9 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 				float phi = length(Ip.xz)/star_r;
 				float2 tx = round(float2(theta,phi)*1600)/20;
 				float2 ruido = round(tex2D(noise,tx).xy * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb * 0.75;
+				tx = float2(theta*k_theta,phi*k_phi) + ruido*0.25;
+				color_base = tex2D(ds_surface, tx).rgb;
+				color_base *= 1 - (star_r - length(Ip))/45.0;
 				N = float3(0,1,0);
 			}
 		}
@@ -491,8 +468,9 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 				float phi = length(Ip.yz)/star_r;
 				float2 tx = round(float2(theta,phi)*1600)/20;
 				float2 ruido = round(tex2D(noise,tx).yz * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb * 0.75;
+				tx = float2(theta*k_theta,phi*k_phi) + ruido*0.25;
+				color_base = tex2D(ds_surface, tx).rgb;
+				color_base *= 1 - (star_r - length(Ip))/45.0;
 				N = float3(0,1,0);
 			}
 		}
@@ -508,8 +486,9 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 				float phi = length(Ip.yz)/star_r;
 				float2 tx = round(float2(theta,phi)*1600)/20;
 				float2 ruido = round(tex2D(noise,tx).yz * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb * 0.75;
+				tx = float2(theta*k_theta,phi*k_phi) + ruido*0.25;
+				color_base = tex2D(ds_surface, tx).rgb;
+				color_base *= 1 - (star_r - length(Ip))/45.0;
 				N = float3(0,1,0);
 			}
 		}
@@ -528,10 +507,12 @@ PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS)
 			phi = N.y * 0.5 + 0.5;			
 			float2 tx = round(float2(theta,phi)*1600)/20;
 			float2 ruido = round(tex2D(noise,tx).xy * 256);
-			tx = float2(theta*1600,phi*800) + ruido*0.25;
-			color_base = tex2D(ds_surface, tx).rgb * 0.6;
+			tx = float2(theta*k_theta,phi*k_phi) + ruido*0.25;
+			color_base = tex2D(ds_surface, tx).rgb;
+			color_base *= 1 - (star_r - length(Ip))/45.0;
 		}
 	}
+	
 	
 		
 	float3 L = normalize(lightPosition.xyz - Ip);
@@ -561,217 +542,23 @@ technique DeathStar
 }
 
 
-
-	
-	
-	
-	/*
-	t1 = sphere(LookFrom, rd ,float3(0,0,0) , star_r-1500).x;
-	if(t1!=0 && (t1<t || t<=0))
-	{
-		t = t1;
-		Ip = LookFrom + rd * t;
-		color_base.rgb = 0.1;
-		lighting = 0;
-	}
-	t1 = disc(LookFrom, rd ,float3(0,200,0) , star_r);
-	if(t1!=0 && (t1<t || t<=0))
-	{
-		t = t1;
-		Ip = LookFrom + rd * t;
-		color_base = tex2D(ds_surface, Ip.xz*0.001).rgb;
-		lighting = 0;
-	}
-	
-	t1 = disc(LookFrom, rd ,float3(0,-200,0) , star_r);
-	if(t1!=0 && (t1<t || t<=0))
-	{
-		t = t1;
-		Ip = LookFrom + rd * t;
-		color_base = tex2D(ds_surface, Ip.xz*0.001).rgb;
-		lighting = 0;
-	}
-	*/
-	/*
-	PS_OUTPUT ps_ds(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) 
+PS_OUTPUT ps_skybox(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) 
 {
 	PS_OUTPUT rta;
 	float x = vpos.x;
 	float y = vpos.y;
 	float3 rd = normalize(ViewDir + Dy*(0.5*(screen_dy-2*y)) - Dx*(0.5*(2*x-screen_dx)));	
-	float4 sky_color = texCube_skybox(rd);
-	
-	float3 color_base = 0;
-	float3 N = 0;
-	int lighting = 1;
-	float3 Ip = 0;
-	float2 q = sphere(LookFrom, rd ,float3(0,0,0) , star_r);
-	float t = q.x;
-	float t0 = q.x;		// q.x = t de entrada a la esfera, todos los puntos de interseccion tienen que ser luego de t0
-	float tf = q.y;		// q.y = t de salida 
-	float phi = 0 , theta = 0;
-	
-	if(t>0)
-	{
-		Ip = LookFrom + rd * t;
-		if(length(Ip - reactor)<radio_reactor)
-		{
-			float t0 = sphere(LookFrom, rd  , reactor , radio_reactor).y;
-			t = t0;
-			Ip = LookFrom + rd * t;
-			if(dot(Ip,Ip)>r2)
-				discard;
-			
-			color_base = float3(0.25,0.25,0.25);
-			N = normalize(reactor - Ip);
-		}
-		else
-		{
-			N = normalize(Ip);
-			theta = atan2(N.x, N.z) / (2*PI) + 0.5;
-			phi = N.y * 0.5 + 0.5;			
-			
-			float2 tx = round(float2(theta,phi)*1600)/20;
-			float2 ruido = round(tex2D(noise,tx).xy * 256);
-			tx = float2(theta*1600,phi*800) + ruido*0.25;
-			color_base = tex2D(ds_surface, tx).rgb;
-			
-			float d = abs(q.x - q.y);
-			if(d<500)
-			{
-				color_base = lerp(sky_color.rgb , float3(0.5,0.5,0.5) , pow(d /500 , 3));
-				lighting = 0;
-			}
-		}
-	}
-	else
-	if(q.y>0 && t<0)
-	{
-		// el punto de vista esta dentro de la esfera
-		t0 = 0;
-		Ip = LookFrom;
-	}
-	
-	float dt = 50;
-	float dq = 400;
-	bool trench_y =	fmod(Ip.y +80000+dt, dq)<2*dt && abs(Ip.y)<2000 ? true : false;
-	bool trench_x =	fmod(Ip.x +80000+dt, dq)<2*dt && abs(Ip.x)<2000 ? true : false;
-	
-	if(trench_x || trench_y)
-		t = 0;
-	
-	
-	if(trench_y )
-	{
-		float h = floor((Ip.y+80000+dt)/dq)*dq  - 80000;
-		float t1 = (h-dt-LookFrom.y) / rd.y;
-		if(t1>t0 && t1<tf)
-		{
-			Ip = LookFrom + rd * t1;
-			if(!(fmod(Ip.x +80000+dt, dq)<2*dt && abs(Ip.x)<2000))
-			{
-				t = t1;
-				float theta = atan2(Ip.x, Ip.z) / (2*PI) + 0.5;
-				float phi = length(Ip.xz)/star_r;
-				float2 tx = round(float2(theta,phi)*1600)/20;
-				float2 ruido = round(tex2D(noise,tx).xy * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb;
-				N = float3(0,1,0);
-			}
-		}
-		
-		t1 = (h+dt -LookFrom.y) / rd.y;
-		if(t1>t0 && t1<tf && (t1<t || t<=0))
-		{
-			Ip = LookFrom + rd * t1;
-			if(!(fmod(Ip.x +80000+dt, dq)<2*dt && abs(Ip.x)<2000))
-			{
-				t = t1;
-				float theta = atan2(Ip.x, Ip.z) / (2*PI) + 0.5;
-				float phi = length(Ip.xz)/star_r;
-				float2 tx = round(float2(theta,phi)*1600)/20;
-				float2 ruido = round(tex2D(noise,tx).xy * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb;
-				N = float3(0,1,0);
-			}
-		}
-	}
-
-	
-	if(trench_x )
-	{
-		float h = floor((Ip.x+80000+dt)/dq)*dq - 80000;
-		float t1 = (h-dt-LookFrom.x) / rd.x;
-		if(t1>t0 && t1<tf && (t1<t || t<=0))
-		{
-			Ip = LookFrom + rd * t1;
-			if(!(fmod(Ip.y +80000+dt, dq)<2*dt && abs(Ip.y)<2000))
-			{
-				t = t1;
-				float theta = atan2(Ip.y, Ip.z) / (2*PI) + 0.5;
-				float phi = length(Ip.yz)/star_r;
-				float2 tx = round(float2(theta,phi)*1600)/20;
-				float2 ruido = round(tex2D(noise,tx).yz * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb;
-				N = float3(0,1,0);
-			}
-		}
-		
-		t1 = (h+dt -LookFrom.x) / rd.x;
-		if(t1>t0 && t1<tf && (t1<t || t<=0))
-		{
-			Ip = LookFrom + rd * t1;
-			if(!(fmod(Ip.y +80000+dt, dq)<2*dt && abs(Ip.y)<2000))
-			{
-				t = t1;
-				float theta = atan2(Ip.y, Ip.z) / (2*PI) + 0.5;
-				float phi = length(Ip.yz)/star_r;
-				float2 tx = round(float2(theta,phi)*1600)/20;
-				float2 ruido = round(tex2D(noise,tx).yz * 256);
-				tx = float2(theta*1600,phi*800) + ruido*0.25;
-				color_base = tex2D(ds_surface, tx).rgb;
-				N = float3(0,1,0);
-			}
-		}
-	}
-
-	float t1 = sphere(LookFrom, rd ,float3(0,0,0) , star_r-50).x;
-	if(t1>t0 && t1<tf && (t1<t || t<=0))
-	{
-		t = t1;
-		Ip = LookFrom + rd * t;
-		N = normalize(Ip);
-		theta = atan2(N.x, N.z) / (2*PI) + 0.5;
-		phi = N.y * 0.5 + 0.5;			
-		float2 tx = round(float2(theta,phi)*1600)/20;
-		float2 ruido = round(tex2D(noise,tx).xy * 256);
-		tx = float2(theta*1600,phi*800) + ruido*0.25;
-		color_base = tex2D(ds_surface, tx).rgb * 0.4;
-	}
-	
-	//if(fmod(phi*3600,150)<5)
-	//	discard;
-	//if(fmod(theta*3600,150)<5)
-	//	discard;
-	
-		
-	float3 L = normalize(lightPosition.xyz - Ip);
-	float k = lighting ? clamp( abs(dot(N, L)) + 0.2 , 0, 1) : 1;
-	rta.color = float4(color_base * k , 1);
-	
-	float Z = clamp(Zn + t , Zn,Zf);
-	rta.depth = MatProjQ * (1-Zn / Z);
-
-	
-	if(t<=0)
-	{
-		rta.color = sky_color;
-		rta.depth = 1;
-	}
-	
+	rta.color = texCube_skybox(rd);
+	rta.depth = 1;
 	return rta;
 }
-*/
+
+technique SkyBox
+{
+	pass Pass_0
+	{
+		VertexShader = compile vs_3_0 VSCopy();
+		PixelShader = compile ps_3_0 ps_skybox();
+	}
+}
+
