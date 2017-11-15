@@ -555,8 +555,10 @@ namespace TGC.Group.Model
         public int cant_cpt = 5;        // cantidad de puntos de colision
         public int cd_index = 0;        // colision detectada
         public float cd_timer = 0;      // timer colision detectada
+        public float tiempo_explosion = 2;      // tiempo total que tarda en explotar
         public float r_timer = 0;       // timer resucitar 
-        public float intro_timer = 10;   // timer de introduccion
+        public float intro_timer = 0;   // timer de introduccion
+        public Vector4 _Sphere;
         
 
         private static readonly Random random = new Random();
@@ -725,6 +727,19 @@ namespace TGC.Group.Model
                 {
                     cameraPosition = new Vector3(1000, 2000, 0);
                     lookAt = new Vector3(0, 0, 0);
+
+
+                    // test de explosion
+                    cameraPosition = new Vector3(-4.844278f, -200.8399f, 7989.138f);
+                    lookAt = new Vector3(-7.664487f, -210.4348f, 7988.982f);
+                    _Sphere = new Vector4(-10.02304f, -209.638f, 7986.195f, 1.0f);
+
+                    /*
+                    cameraPosition = new Vector3(20, 0,0);
+                    lookAt = new Vector3(0,0,0);
+                    _Sphere = new Vector4(0, 0, 0, 1.0f);
+                    */
+
                 }
                 Camara.SetCamera(cameraPosition, lookAt , new Vector3(0,1,0));
             }
@@ -1095,7 +1110,7 @@ namespace TGC.Group.Model
                         if (scene[curr_block].colisiona(p[s]))
                         {
                             colisiona = true;
-                            cd_timer = 1;
+                            cd_timer = tiempo_explosion;
                             cd_index = s;
                         }
                     }
@@ -1145,7 +1160,30 @@ namespace TGC.Group.Model
             if (curr_mode == defines.MODO_GAME)
             {
                 // dibujo el quad pp dicho :
-                effect.Technique = "SkyBox";
+                if (cd_timer > 0)
+                {
+                    float t = (tiempo_explosion - cd_timer) / tiempo_explosion;
+                    effect.Technique = "Explosion";
+                    Matrix O = Helper.MatrixfromBasis(
+                                            1, 0, 0,
+                                            0, 0, 1,
+                                            0, 1, 0
+                                            );
+                    if (Math.Abs(ship_an + ship_an_base) > 0.001f)
+                        O = O * Matrix.RotationX(ship_an_base + ship_an);
+                    if (Math.Abs(ship_anV) > 0.001f)
+                        O = O * Matrix.RotationY(ship_anV);
+                    Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
+                    Vector3 pt = new Vector3(0, 0, 0);
+                    pt.TransformCoordinate(Matrix.Translation(collision_pt[cd_index]) * T);
+                    effect.SetValue("_Sphere", new Vector4(pt.X, pt.Y, pt.Z, 10.0f*t + 0.5f));
+                    effect.SetValue("_NoiseAmp", -10f * t);
+                    effect.SetValue("_NoiseFreq", 1.1f);
+
+                }
+                else
+                    effect.Technique = "SkyBox";
+
                 device.VertexFormat = CustomVertex.PositionTextured.Format;
                 device.SetStreamSource(0, g_pVBV3D, 0);
                 Vector3 ViewDir = Camara.LookAt - Camara.Position;
@@ -1182,8 +1220,6 @@ namespace TGC.Group.Model
                 effect.EndPass();
                 effect.End();
             }
-
-            /*
             else
             {
                 // TEST explosion
@@ -1214,10 +1250,15 @@ namespace TGC.Group.Model
                 effect.SetValue("ViewDir", TgcParserUtils.vector3ToFloat4Array(ViewDir));
                 effect.SetValue("Dx", TgcParserUtils.vector3ToFloat4Array(Dx));
                 effect.SetValue("Dy", TgcParserUtils.vector3ToFloat4Array(Dy));
-                effect.SetValue("MatProjQ", Q);
+                effect.SetValue("MatProjQ", Q); 
                 effect.SetValue("Zn", Zn);
                 effect.SetValue("Zf", Zf);
                 effect.SetValue("time", time);
+
+                Vector3 pt = new Vector3(0,0,0);
+                effect.SetValue("_Sphere", _Sphere + new Vector4(0,0,0,(float)Math.Sin(time) + 0.5f));
+                effect.SetValue("_NoiseAmp", -5f);
+                effect.SetValue("_NoiseFreq", 1.1f);
 
                 effect.Begin(FX.None);
                 effect.BeginPass(0);
@@ -1226,7 +1267,6 @@ namespace TGC.Group.Model
                 effect.End();
 
             }
-            */
 
             RenderScene("DefaultTechnique");
             device.EndScene();
@@ -1378,12 +1418,13 @@ namespace TGC.Group.Model
 
                 // debug colision
                 // 
+                /*
                 if (cd_timer > 0 )
                 {
                     Box.Technique = technique;
                     Box.Transform = Matrix.Scaling(new Vector3(1, 1, 1)*(1-cd_timer)*30) * Matrix.Translation(collision_pt[cd_index]) * T;
                     Box.render();
-                }
+                }*/
             }
 
 
