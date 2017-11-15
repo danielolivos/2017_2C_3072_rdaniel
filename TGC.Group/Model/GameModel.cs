@@ -535,7 +535,7 @@ namespace TGC.Group.Model
         public TgcBox LODMesh;
 
         public float star_r = 8000;
-        public float ship_k = 0.06f;
+        public float ship_k = 0.09f;
         public Vector3 ship_vel;
         public Vector3 ship_N;
         public Vector3 ship_bitan;
@@ -560,6 +560,7 @@ namespace TGC.Group.Model
         public float r_timer = 0;      // timer de resurreccion
         public Vector4 _Sphere;
         
+  
 
         private static readonly Random random = new Random();
 
@@ -568,7 +569,7 @@ namespace TGC.Group.Model
         public Texture g_pRenderTarget, g_pPosition, g_pNormal;
         public VertexBuffer g_pVBV3D;
         public Texture textura_bloques;
-
+        public Vector3 LightPos;
         public float time = 0;
 
 
@@ -725,14 +726,16 @@ namespace TGC.Group.Model
                 }
                 else
                 {
-                    cameraPosition = new Vector3(1000, 2000, 0);
+                    cameraPosition = new Vector3(0,100, 10);
                     lookAt = new Vector3(0, 0, 0);
 
 
                     // test de explosion
+                    /*
                     cameraPosition = new Vector3(-4.844278f, -200.8399f, 7989.138f);
                     lookAt = new Vector3(-7.664487f, -210.4348f, 7988.982f);
                     _Sphere = new Vector4(-10.02304f, -209.638f, 7986.195f, 1.0f);
+                    */
 
                     /*
                     cameraPosition = new Vector3(20, 0,0);
@@ -807,12 +810,12 @@ namespace TGC.Group.Model
         {
             Vector3 dir = new Vector3(0, -600, 300);
             dir.Normalize();
-            Vector3 LP = curr_mode == defines.MODO_TEST_BLOCK ? new Vector3(0, 150, 0) : dir * 10000;
-            Vector3 LightDir = LP;
+            LightPos = curr_mode == defines.MODO_TEST_BLOCK ? new Vector3(0, 150, 0) : dir * 10000;
+            Vector3 LightDir = LightPos;
             LightDir.Normalize();
             //Cargar variables shader de la luz
             effect.SetValue("lightColor", ColorValue.FromColor(Color.FromArgb(240, 240, 255)));
-            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
+            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
             effect.SetValue("lightDir", TgcParserUtils.vector3ToFloat4Array(LightDir));
             effect.SetValue("eyePosition", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
             effect.SetValue("lightIntensity", (float)1);
@@ -896,10 +899,23 @@ namespace TGC.Group.Model
                     r_timer = 0;
             }
 
+            if (Input.keyDown(Microsoft.DirectX.DirectInput.Key.Space) && intro_timer != 0)
+                intro_timer = 0.0001f;
+
+
+
             if (Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftControl))
-                ship_an_base = (float)Math.PI / 2.0f;
+            {
+                ship_an_base += ElapsedTime * 10.0f;
+                if (ship_an_base > (float)Math.PI / 2.0f)
+                    ship_an_base = (float)Math.PI / 2.0f;
+            }
             else
-                ship_an_base = 0;
+            {
+                ship_an_base -= ElapsedTime * 10.0f;
+                if(ship_an_base<0)
+                    ship_an_base = 0;
+            }
 
             if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.M))
             {
@@ -1131,8 +1147,8 @@ namespace TGC.Group.Model
                 Vector3 ViewDir = Camara.LookAt - Camara.Position;
                 float cam_dist = ViewDir.Length();
                 ViewDir.Normalize();
-                Vector3 desired_LF = ship_pos - ship_vel * 10 + ship_N * 0.8f;
-                Vector3 desired_LA = ship_pos + ship_N * 1.0f;
+                Vector3 desired_LF = ship_pos - ship_vel * 15 + ship_N * 2.0f;
+                Vector3 desired_LA = ship_pos + ship_N * 2.0f;
                 Vector3 cam_N = ship_pos;
                 cam_N.Normalize();
                 Camara.SetCamera(desired_LF, desired_LA, cam_N);
@@ -1220,7 +1236,7 @@ namespace TGC.Group.Model
                 effect.EndPass();
                 effect.End();
             }
-            else
+            /*else
             {
                 // TEST explosion
                 effect.Technique = "Explosion";
@@ -1267,6 +1283,7 @@ namespace TGC.Group.Model
                 effect.End();
 
             }
+            */
 
             RenderScene("DefaultTechnique");
             device.EndScene();
@@ -1328,6 +1345,7 @@ namespace TGC.Group.Model
                         DrawText.drawText("M       --> lock / unlock mouse  ", 400, 180, Color.Yellow);
                         DrawText.drawText("Esquiva obstaculos y paredes", 400, 400, Color.Yellow);
                         DrawText.drawText("El objetivo es llegar al final de trench", 400, 420, Color.Yellow);
+                        DrawText.drawText("SPACE   --> Saltear la intro", 400, 440, Color.Yellow);
                     }
                     else
                         DrawText.drawText((int)intro_timer + "s para comenzar...", 400, 320, Color.Yellow);
@@ -1389,9 +1407,11 @@ namespace TGC.Group.Model
             if (curr_mode != defines.MODO_CAMARA)
                 RenderBloques();
 
-            bool render_ship = curr_mode == defines.MODO_GAME ? true : false;
+            bool render_ship = curr_mode != defines.MODO_TEST_BLOCK? true : false;
             if (render_ship && r_timer != 0)
                 render_ship = (int)(r_timer * 1000) % 2 == 0 ? true : false;
+
+         
 
             if (render_ship)
             {
@@ -1408,12 +1428,17 @@ namespace TGC.Group.Model
 
                 Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
                 effect.SetValue("ssao", 0);
+
+
+                Vector3 LP = ship_pos - ship_vel * 220 + ship_N*50;
+                effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
                 foreach (TgcMesh mesh in xwing)
                 {
                     mesh.Transform = T;
                     mesh.Technique = technique;
                     mesh.render();
                 }
+                effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
 
 
                 // debug colision
