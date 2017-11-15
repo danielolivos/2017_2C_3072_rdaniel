@@ -554,10 +554,10 @@ namespace TGC.Group.Model
         public Vector3[] collision_pt = new Vector3[5];
         public int cant_cpt = 5;        // cantidad de puntos de colision
         public int cd_index = 0;        // colision detectada
-        public float cd_timer = 0;      // timer colision detectada
+        public float explosion_timer = 0;      // timer colision detectada
         public float tiempo_explosion = 2;      // tiempo total que tarda en explotar
-        public float r_timer = 0;       // timer resucitar 
-        public float intro_timer = 0;   // timer de introduccion
+        public float intro_timer = 10;   // timer de introduccion
+        public float r_timer = 0;      // timer de resurreccion
         public Vector4 _Sphere;
         
 
@@ -867,12 +867,14 @@ namespace TGC.Group.Model
                 }
             }
 
-            if (cd_timer>0)
+            if (explosion_timer>0)
             {
-                cd_timer -= ElapsedTime;
-                if (cd_timer < 0)
+                ship_speed = 5;
+                explosion_timer -= ElapsedTime;
+                if (explosion_timer < 0)
                 {
-                    cd_timer = 0;
+                    explosion_timer = 0;
+                    ship_speed = 250;
                     // crash
                     // ship_pos = new Vector3(0, 50, star_r - 15);
                     //ship_pos = scene[scene.Count - 1].Position;
@@ -885,8 +887,6 @@ namespace TGC.Group.Model
                     // le doy 2 segundos de changui
                     r_timer = 2;
                 }
-                else
-                    return;
             }
 
             if (r_timer > 0)
@@ -1084,7 +1084,7 @@ namespace TGC.Group.Model
 
 
                 // colision con obstaculos
-                if (r_timer == 0)
+                if (r_timer == 0 && explosion_timer==0)
                 {
                     Matrix O = Helper.MatrixfromBasis(
                                                         1, 0, 0,
@@ -1110,7 +1110,7 @@ namespace TGC.Group.Model
                         if (scene[curr_block].colisiona(p[s]))
                         {
                             colisiona = true;
-                            cd_timer = tiempo_explosion;
+                            explosion_timer = tiempo_explosion;
                             cd_index = s;
                         }
                     }
@@ -1160,9 +1160,9 @@ namespace TGC.Group.Model
             if (curr_mode == defines.MODO_GAME)
             {
                 // dibujo el quad pp dicho :
-                if (cd_timer > 0)
+                if (explosion_timer > 0)
                 {
-                    float t = (tiempo_explosion - cd_timer) / tiempo_explosion;
+                    float t = (tiempo_explosion - explosion_timer) / tiempo_explosion;
                     effect.Technique = "Explosion";
                     Matrix O = Helper.MatrixfromBasis(
                                             1, 0, 0,
