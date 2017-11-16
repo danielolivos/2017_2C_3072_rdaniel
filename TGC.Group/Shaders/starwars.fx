@@ -46,6 +46,18 @@ sampler_state
 	MIPFILTER = LINEAR;
 };
 
+texture g_RenderTarget4;
+sampler RenderTarget4 =
+sampler_state
+{
+	Texture = <g_RenderTarget4>;
+	ADDRESSU = CLAMP;
+	ADDRESSV = CLAMP;
+	MINFILTER = LINEAR;
+	MAGFILTER = LINEAR;
+	MIPFILTER = LINEAR;
+};
+
 texture g_Position;
 sampler PositionBuffer =
 sampler_state
@@ -225,7 +237,7 @@ void VSCopy(float4 vPos : POSITION, float2 vTex : TEXCOORD0, out float4 oPos : P
 
 float4 PSPostProcess(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) : COLOR0
 {
-	return tex2D(RenderTarget, Tex);
+	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, Tex);
 }
 
 technique PostProcess
@@ -237,6 +249,74 @@ technique PostProcess
 	}
 }
 
+
+
+float4 PSDownFilter4( in float2 Tex : TEXCOORD0 ) : COLOR0
+{
+    float4 Color = 0;
+    for (int i = 0; i < 4; i++)
+    for (int j = 0; j < 4; j++)
+	{
+		float4 c = tex2D(RenderTarget, Tex+float2((float)i/screen_dx,(float)j/screen_dy));
+		if(c.r>0.5)
+			Color += c;
+	}
+
+	return Color / 16;
+}
+
+
+
+technique DownFilter4
+{
+   pass Pass_0
+   {
+	  VertexShader = compile vs_3_0 VSCopy();
+	  PixelShader = compile ps_3_0 PSDownFilter4();
+   }
+
+}
+
+// Gaussian Blur
+
+static const int kernel_r = 6;
+static const int kernel_size = 13;
+static const float Kernel[kernel_size] = 
+{
+    0.002216,    0.008764,    0.026995,    0.064759,    0.120985,    0.176033,    0.199471,    0.176033,    0.120985,    0.064759,    0.026995,    0.008764,    0.002216,
+};
+
+void BlurH(float2 screen_pos  : TEXCOORD0,out float4 Color : COLOR)
+{ 
+    Color = 0;
+	for(int i=0;i<kernel_size;++i)
+		Color += tex2D(RenderTarget, screen_pos+float2((float)(i-kernel_r)/screen_dx,0)) * Kernel[i];
+	Color.a = 1;
+}
+
+void BlurV(float2 screen_pos  : TEXCOORD0,out float4 Color : COLOR)
+{ 
+    Color = 0;
+	for(int i=0;i<kernel_size;++i)
+		Color += tex2D(RenderTarget, screen_pos+float2(0,(float)(i-kernel_r)/screen_dy)) * Kernel[i];
+	Color.a = 1;
+
+}
+
+technique GaussianBlurSeparable
+{
+   pass Pass_0
+   {
+	  VertexShader = compile vs_3_0 VSCopy();
+	  PixelShader = compile ps_3_0 BlurH();
+   }
+   pass Pass_1
+   {
+	  VertexShader = compile vs_3_0 VSCopy();
+	  PixelShader = compile ps_3_0 BlurV();
+   }
+
+}
 
 
 const float star_r = 8000;

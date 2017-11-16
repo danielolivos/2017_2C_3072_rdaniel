@@ -564,9 +564,11 @@ namespace TGC.Group.Model
 
         private static readonly Random random = new Random();
 
-        public Effect effect;
+        public Effect effect , effectBase , effectExplosion;
         public Surface g_pDepthStencil; // Depth-stencil buffer
         public Texture g_pRenderTarget, g_pPosition, g_pNormal;
+        public Texture g_pRenderTarget4, g_pRenderTarget4Aux;
+
         public VertexBuffer g_pVBV3D;
         public Texture textura_bloques;
         public Vector3 LightPos;
@@ -672,6 +674,7 @@ namespace TGC.Group.Model
 
             var textura_skybox = TgcTexture.createTexture(MediaDir + "Textures\\Color A05.png");
             effect.SetValue("texSkybox", textura_skybox.D3dTexture);
+            effectExplosion.SetValue("texSkybox", textura_skybox.D3dTexture);
             textura_bloques = TgcTexture.createTexture(MediaDir + "Textures\\4.png").D3dTexture;
 
             // puntos de colision de la nave
@@ -756,13 +759,23 @@ namespace TGC.Group.Model
             var d3dDevice = D3DDevice.Instance.Device;
             //Cargar Shader personalizado
             string compilationErrors;
-            effect = Effect.FromFile(d3dDevice, ShadersDir + "starwars.fxo", null, null, ShaderFlags.PreferFlowControl,
+            effectBase = Effect.FromFile(d3dDevice, ShadersDir + "base.fxo", null, null, ShaderFlags.PreferFlowControl,
                 null, out compilationErrors);
-            if (effect == null)
+            if (effectBase == null)
             {
-                throw new Exception("Error al cargar shader. Errores: " + compilationErrors);
+                throw new Exception("Error al cargar shader effectBase. Errores: " + compilationErrors);
             }
-            effect.Technique = "DefaultTechnique";
+            effectBase.Technique = "DefaultTechnique";
+
+            effectExplosion = Effect.FromFile(d3dDevice, ShadersDir + "explosion.fxo", null, null, ShaderFlags.PreferFlowControl,
+                null, out compilationErrors);
+            if (effectExplosion == null)
+            {
+                throw new Exception("Error al cargar shader effectExplosion. Errores: " + compilationErrors);
+            }
+            effectExplosion.Technique = "Explosion";
+
+            effect = effectBase;
 
             g_pDepthStencil = d3dDevice.CreateDepthStencilSurface(d3dDevice.PresentationParameters.BackBufferWidth,
                 d3dDevice.PresentationParameters.BackBufferHeight,
@@ -781,10 +794,22 @@ namespace TGC.Group.Model
                 , d3dDevice.PresentationParameters.BackBufferHeight, 1, Usage.RenderTarget, Format.A32B32G32R32F,
                 Pool.Default);
 
-            effect.SetValue("g_RenderTarget", g_pRenderTarget);
+            // glow map effect
+            g_pRenderTarget4 = new Texture(d3dDevice, d3dDevice.PresentationParameters.BackBufferWidth / 4
+                    , d3dDevice.PresentationParameters.BackBufferHeight / 4, 1, Usage.RenderTarget,
+                        Format.X8R8G8B8, Pool.Default);
+
+            g_pRenderTarget4Aux = new Texture(d3dDevice, d3dDevice.PresentationParameters.BackBufferWidth / 4
+                    , d3dDevice.PresentationParameters.BackBufferHeight / 4, 1, Usage.RenderTarget,
+                        Format.X8R8G8B8, Pool.Default);
+
+
+            effectBase.SetValue("g_RenderTarget", g_pRenderTarget);
             // Resolucion de pantalla
-            effect.SetValue("screen_dx", d3dDevice.PresentationParameters.BackBufferWidth);
-            effect.SetValue("screen_dy", d3dDevice.PresentationParameters.BackBufferHeight);
+            effectBase.SetValue("screen_dx", d3dDevice.PresentationParameters.BackBufferWidth);
+            effectBase.SetValue("screen_dy", d3dDevice.PresentationParameters.BackBufferHeight);
+            effectExplosion.SetValue("screen_dx", d3dDevice.PresentationParameters.BackBufferWidth);
+            effectExplosion.SetValue("screen_dy", d3dDevice.PresentationParameters.BackBufferHeight);
 
             CustomVertex.PositionTextured[] vertices =
             {
@@ -792,7 +817,7 @@ namespace TGC.Group.Model
             new CustomVertex.PositionTextured(1, 1, 1, 1, 0),
             new CustomVertex.PositionTextured(-1, -1, 1, 0, 1),
             new CustomVertex.PositionTextured(1, -1, 1, 1, 1)
-        };
+             };
             //vertex buffer de los triangulos
             g_pVBV3D = new VertexBuffer(typeof(CustomVertex.PositionTextured),
                 4, d3dDevice, Usage.Dynamic | Usage.WriteOnly,
@@ -801,7 +826,7 @@ namespace TGC.Group.Model
 
 
             var textura_ruido = TgcTexture.createTexture(MediaDir + "Textures\\noise.png");
-            effect.SetValue("texNoise", textura_ruido.D3dTexture);
+            effectBase.SetValue("texNoise", textura_ruido.D3dTexture);
 
 
         }
@@ -814,20 +839,20 @@ namespace TGC.Group.Model
             Vector3 LightDir = LightPos;
             LightDir.Normalize();
             //Cargar variables shader de la luz
-            effect.SetValue("lightColor", ColorValue.FromColor(Color.FromArgb(240, 240, 255)));
-            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
-            effect.SetValue("lightDir", TgcParserUtils.vector3ToFloat4Array(LightDir));
-            effect.SetValue("eyePosition", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
-            effect.SetValue("lightIntensity", (float)1);
-            effect.SetValue("lightAttenuation", (float)0);
+            effectBase.SetValue("lightColor", ColorValue.FromColor(Color.FromArgb(240, 240, 255)));
+            effectBase.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
+            effectBase.SetValue("lightDir", TgcParserUtils.vector3ToFloat4Array(LightDir));
+            effectBase.SetValue("eyePosition", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
+            effectBase.SetValue("lightIntensity", (float)1);
+            effectBase.SetValue("lightAttenuation", (float)0);
 
             //Cargar variables de shader de Material. El Material en realidad deberia ser propio de cada mesh. Pero en este ejemplo se simplifica con uno comun para todos
-            effect.SetValue("materialEmissiveColor", ColorValue.FromColor(Color.FromArgb(0, 0, 0)));
-            effect.SetValue("materialAmbientColor", ColorValue.FromColor(Color.FromArgb(120, 120, 120)));
-            effect.SetValue("materialDiffuseColor", ColorValue.FromColor(Color.FromArgb(120, 120, 120)));
-            effect.SetValue("materialSpecularColor", ColorValue.FromColor(Color.FromArgb(240, 204, 155)));
-            effect.SetValue("materialSpecularExp", (float)40);
-            effect.SetValue("specularFactor", (float)1.3);
+            effectBase.SetValue("materialEmissiveColor", ColorValue.FromColor(Color.FromArgb(0, 0, 0)));
+            effectBase.SetValue("materialAmbientColor", ColorValue.FromColor(Color.FromArgb(120, 120, 120)));
+            effectBase.SetValue("materialDiffuseColor", ColorValue.FromColor(Color.FromArgb(120, 120, 120)));
+            effectBase.SetValue("materialSpecularColor", ColorValue.FromColor(Color.FromArgb(240, 204, 155)));
+            effectBase.SetValue("materialSpecularExp", (float)40);
+            effectBase.SetValue("specularFactor", (float)1.3);
         }
 
 
@@ -1173,11 +1198,13 @@ namespace TGC.Group.Model
             device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
             device.BeginScene();
 
+            
             if (curr_mode == defines.MODO_GAME)
             {
                 // dibujo el quad pp dicho :
                 if (explosion_timer > 0)
                 {
+                    effect = effectExplosion;
                     float t = (tiempo_explosion - explosion_timer) / tiempo_explosion;
                     effect.Technique = "Explosion";
                     Matrix O = Helper.MatrixfromBasis(
@@ -1285,20 +1312,88 @@ namespace TGC.Group.Model
             }
             */
 
+            effect = effectBase;
             RenderScene("DefaultTechnique");
             device.EndScene();
             pSurf.Dispose();
 
+            if (explosion_timer == 0)
+            {
+                // glow effect
+                // 1er pasada: downfilter x 4
+                // -----------------------------------------------------
+                pSurf = g_pRenderTarget4.GetSurfaceLevel(0);
+                device.SetRenderTarget(0, pSurf);
+                device.BeginScene();
+                effect.Technique = "DownFilter4";
+                device.VertexFormat = CustomVertex.PositionTextured.Format;
+                device.SetStreamSource(0, g_pVBV3D, 0);
+                effect.SetValue("g_RenderTarget", g_pRenderTarget);
+                device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
+                effect.Begin(FX.None);
+                effect.BeginPass(0);
+                device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
+                effect.EndPass();
+                effect.End();
+                pSurf.Dispose();
+                device.EndScene();
+                device.DepthStencilSurface = pOldDS;
 
+                // Pasadas de blur
+                for (int P = 0; P < 3; ++P)
+                {
+                    // Gaussian blur Horizontal
+                    // -----------------------------------------------------
+                    pSurf = g_pRenderTarget4Aux.GetSurfaceLevel(0);
+                    device.SetRenderTarget(0, pSurf);
+                    // dibujo el quad pp dicho :
+                    device.BeginScene();
+                    effect.Technique = "GaussianBlurSeparable";
+                    device.VertexFormat = CustomVertex.PositionTextured.Format;
+                    device.SetStreamSource(0, g_pVBV3D, 0);
+                    effect.SetValue("g_RenderTarget", g_pRenderTarget4);
+
+                    device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
+                    effect.Begin(FX.None);
+                    effect.BeginPass(0);
+                    device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
+                    effect.EndPass();
+                    effect.End();
+                    pSurf.Dispose();
+                    device.EndScene();
+
+                    pSurf = g_pRenderTarget4.GetSurfaceLevel(0);
+                    device.SetRenderTarget(0, pSurf);
+                    pSurf.Dispose();
+
+                    //  Gaussian blur Vertical
+                    // -----------------------------------------------------
+                    device.BeginScene();
+                    effect.Technique = "GaussianBlurSeparable";
+                    device.VertexFormat = CustomVertex.PositionTextured.Format;
+                    device.SetStreamSource(0, g_pVBV3D, 0);
+                    effect.SetValue("g_RenderTarget", g_pRenderTarget4Aux);
+
+                    device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
+                    effect.Begin(FX.None);
+                    effect.BeginPass(1);
+                    device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
+                    effect.EndPass();
+                    effect.End();
+                    device.EndScene();
+
+                }
+            }
+
+            // Post procesado final
             device.DepthStencilSurface = pOldDS;
             device.SetRenderTarget(0, pOldRT);
-
-            // dibujo el quad pp dicho :
             device.BeginScene();
             effect.Technique = "PostProcess";
             device.VertexFormat = CustomVertex.PositionTextured.Format;
             device.SetStreamSource(0, g_pVBV3D, 0);
             effect.SetValue("g_RenderTarget", g_pRenderTarget);
+            effect.SetValue("g_RenderTarget4", g_pRenderTarget4Aux);
             effect.SetValue("g_Position", g_pPosition);
             effect.SetValue("g_Normal", g_pNormal);
             effect.SetValue("matProj", device.Transform.Projection);
@@ -1310,10 +1405,12 @@ namespace TGC.Group.Model
             effect.EndPass();
             effect.End();
             device.EndScene();
+            // --------------------------------------------------
+
+
 
 
             device.BeginScene();
-
             /*
             switch (curr_mode)
             {
@@ -1430,7 +1527,7 @@ namespace TGC.Group.Model
                 effect.SetValue("ssao", 0);
 
 
-                Vector3 LP = ship_pos - ship_vel * 220 + ship_N*50;
+                Vector3 LP = ship_pos + ship_vel * 220 + ship_N*150;
                 effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
                 foreach (TgcMesh mesh in xwing)
                 {
