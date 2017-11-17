@@ -1397,6 +1397,7 @@ namespace TGC.Group.Model
             effect.SetValue("g_Position", g_pPosition);
             effect.SetValue("g_Normal", g_pNormal);
             effect.SetValue("matProj", device.Transform.Projection);
+            effect.SetValue("fish_kU", 0.1f);
 
             device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
             effect.Begin(FX.None);

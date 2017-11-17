@@ -334,11 +334,18 @@ technique SkyBox
 	}
 }
 
-
+// Factor de distorcion del ojo de pez
+float fish_kU = 0.25f; 
 
 
 float4 PSPostProcess(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) : COLOR0
 {
+	float2 center = float2(0.5,0.5);
+	float dist = distance(center, Tex);
+    Tex -= center;
+	float percent = 1.0 - ((0.5 - dist) / 0.5) * fish_kU;
+	Tex *= percent;
+    Tex += center;
 	float2 TexG = Tex + float2(1.0/screen_dx , 1.0/screen_dy)*8.0;
 	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*8.0;
 }
