@@ -569,6 +569,15 @@ namespace TGC.Group.Model
         public Texture g_pRenderTarget, g_pPosition, g_pNormal;
         public Texture g_pRenderTarget4, g_pRenderTarget4Aux;
 
+        // Shadow map
+        public int SHADOWMAP_SIZE = 1024;
+        public Texture g_pShadowMap;    // Texture to which the shadow map is rendered
+        public Surface g_pDSShadow;     // Depth-stencil buffer for rendering to shadow map
+        public Texture g_pLightMap;     // Textured light
+        public Matrix g_mShadowProj;    // Projection matrix for shadow map
+        Matrix g_LightView;				// matriz de view del light
+
+
         public VertexBuffer g_pVBV3D;
         public Texture textura_bloques;
         public Vector3 LightPos;
@@ -828,6 +837,31 @@ namespace TGC.Group.Model
             var textura_ruido = TgcTexture.createTexture(MediaDir + "Textures\\noise.png");
             effectBase.SetValue("texNoise", textura_ruido.D3dTexture);
 
+
+            //--------------------------------------------------------------------------------------
+            // Creo el shadowmap. 
+            // Format.R32F
+            // Format.X8R8G8B8
+            g_pShadowMap = new Texture(d3dDevice, SHADOWMAP_SIZE, SHADOWMAP_SIZE,
+                                        1, Usage.RenderTarget, Format.R32F,
+                                        Pool.Default);
+
+            // tengo que crear un stencilbuffer para el shadowmap manualmente
+            // para asegurarme que tenga la el mismo tamaño que el shadowmap, y que no tenga 
+            // multisample, etc etc.
+            g_pDSShadow = d3dDevice.CreateDepthStencilSurface(SHADOWMAP_SIZE,
+                                                             SHADOWMAP_SIZE,
+                                                             DepthFormat.D24S8,
+                                                             MultiSampleType.None,
+                                                             0,
+                                                             true);
+            // por ultimo necesito una matriz de proyeccion para el shadowmap, ya 
+            // que voy a dibujar desde el pto de vista de la luz.
+            // El angulo tiene que ser mayor a 45 para que la sombra no falle en los extremos del cono de luz
+            // de hecho, un valor mayor a 90 todavia es mejor, porque hasta con 90 grados es muy dificil
+            // lograr que los objetos del borde generen sombras
+            float aspectRatio = (float)d3dDevice.PresentationParameters.BackBufferWidth / (float)d3dDevice.PresentationParameters.BackBufferHeight;
+            g_mShadowProj = Matrix.PerspectiveFovLH(Geometry.DegreeToRadian(60),aspectRatio, 1, 50000);
 
         }
 
@@ -1184,14 +1218,64 @@ namespace TGC.Group.Model
         }
 
 
-        
-        public override void Render()
+
+        public void RenderShadowMap()
         {
             var device = D3DDevice.Instance.Device;
-            // lighting pass 
+            // Calculo la matriz de view de la luz
+            // pongo la luz arriba de la nave
+            Vector3 LP = ship_pos + ship_N * 30 - ship_vel*50;
+            Vector3 LPat = ship_pos ;
+            Vector3 LDir = LPat - LP;
+            LDir.Normalize();
+            effect.SetValue("g_vLightPos", new Vector4(LP.X, LP.Y, LP.Z, 1));
+            effect.SetValue("g_vLightDir", new Vector4(LDir.X, LDir.Y, LDir.Z, 1));
+            g_LightView = Matrix.LookAtLH(LP, LP + LDir, ship_vel);
+
+            // inicializacion standard: 
+            effect.SetValue("g_mProjLight", g_mShadowProj);
+            effect.SetValue("g_mViewLightProj", g_LightView * g_mShadowProj);
+
+            // Primero genero el shadow map, para ello dibujo desde el pto de vista de luz
+            // a una textura, con el VS y PS que generan un mapa de profundidades. 
+            Surface pOldRT = device.GetRenderTarget(0);
+            Surface pShadowSurf = g_pShadowMap.GetSurfaceLevel(0);
+            device.SetRenderTarget(0, pShadowSurf);
+            Surface pOldDS = device.DepthStencilSurface;
+            device.DepthStencilSurface = g_pDSShadow;
+            device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.White, 1.0f, 0);
+            device.BeginScene();
+
+            // Hago el render de la escena pp dicha
+            effect.SetValue("g_txShadow", g_pShadowMap);
+            effect.SetValue("texLightMap", g_pLightMap);
+
+            // Dibujo la escena pp dicha. (Solo lo que proyecta sombra)
+            effect.Technique = "RenderShadow";
+            RenderShip("RenderShadow");
+
+            // Termino 
+            device.EndScene();
+
+            //TextureLoader.Save("shadowmap.bmp", ImageFileFormat.Bmp, g_pShadowMap);
+
+            // restuaro el render target y el stencil
+            device.DepthStencilSurface = pOldDS;
+            device.SetRenderTarget(0, pOldRT);
+
+        }
+
+
+
+        public override void Render()
+        {
+
+            //Genero el shadow map
+            RenderShadowMap();
+
+            var device = D3DDevice.Instance.Device;
             var pOldRT = device.GetRenderTarget(0);
             var pOldDS = device.DepthStencilSurface;
-
             var pSurf = g_pRenderTarget.GetSurfaceLevel(0);
             device.SetRenderTarget(0, pSurf);
             device.DepthStencilSurface = g_pDepthStencil;
@@ -1263,55 +1347,6 @@ namespace TGC.Group.Model
                 effect.EndPass();
                 effect.End();
             }
-            /*else
-            {
-                // TEST explosion
-                effect.Technique = "Explosion";
-                device.VertexFormat = CustomVertex.PositionTextured.Format;
-                device.SetStreamSource(0, g_pVBV3D, 0);
-                Vector3 ViewDir = Camara.LookAt - Camara.Position;
-                ViewDir.Normalize();
-
-                Vector3 Up = curr_mode == defines.MODO_CAMARA ? new Vector3(0, 1, 0) : ship_N;
-                Vector3 U, V;
-                V = Vector3.Cross(ViewDir, Up);
-                V.Normalize();
-                U = Vector3.Cross(V, ViewDir);
-                U.Normalize();
-
-                float fov = D3DDevice.Instance.FieldOfView;
-                float W = device.PresentationParameters.BackBufferWidth;
-                float H = device.PresentationParameters.BackBufferHeight;
-                float k = 2 * FastMath.Tan(fov / 2) / H;
-                Vector3 Dy = U * k;
-                Vector3 Dx = V * k;
-                float Zn = D3DDevice.Instance.ZNearPlaneDistance;
-                float Zf = D3DDevice.Instance.ZFarPlaneDistance;
-                float Q = Zf / (Zf - Zn);
-
-                effect.SetValue("LookFrom", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
-                effect.SetValue("ViewDir", TgcParserUtils.vector3ToFloat4Array(ViewDir));
-                effect.SetValue("Dx", TgcParserUtils.vector3ToFloat4Array(Dx));
-                effect.SetValue("Dy", TgcParserUtils.vector3ToFloat4Array(Dy));
-                effect.SetValue("MatProjQ", Q); 
-                effect.SetValue("Zn", Zn);
-                effect.SetValue("Zf", Zf);
-                effect.SetValue("time", time);
-
-                Vector3 pt = new Vector3(0,0,0);
-                effect.SetValue("_Sphere", _Sphere + new Vector4(0,0,0,(float)Math.Sin(time) + 0.5f));
-                effect.SetValue("_NoiseAmp", -5f);
-                effect.SetValue("_NoiseFreq", 1.1f);
-
-                effect.Begin(FX.None);
-                effect.BeginPass(0);
-                device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
-                effect.EndPass();
-                effect.End();
-
-            }
-            */
-
             effect = effectBase;
             RenderScene("DefaultTechnique");
             device.EndScene();
@@ -1386,6 +1421,7 @@ namespace TGC.Group.Model
             }
 
             // Post procesado final
+            // --------------------------------------------------------------------------
             device.DepthStencilSurface = pOldDS;
             device.SetRenderTarget(0, pOldRT);
             device.BeginScene();
@@ -1406,31 +1442,17 @@ namespace TGC.Group.Model
             effect.EndPass();
             effect.End();
             device.EndScene();
-            // --------------------------------------------------
+            // --------------------------------------------------------------------------
 
+            // dibujo el scoreboard, tiempo, vidas, etc (y fps)
+            RenderHUD();
+            device.Present();
+        }
 
-
-
+        public void RenderHUD()
+        {
+            var device = D3DDevice.Instance.Device;
             device.BeginScene();
-            /*
-            switch (curr_mode)
-            {
-                case defines.MODO_TEST_BLOCK:
-                    DrawText.drawText("TEST BLOCK", 700, 30, Color.Yellow);
-                    break;
-                case defines.MODO_GAME:
-                    DrawText.drawText("ship_pos: " + (int)ship_pos.X + "," + (int)ship_pos.Y + "," + (int)ship_pos.Z, 5, 20, Color.Yellow);
-                    DrawText.drawText("ship_spped: " + ship_speed, 5, 40, Color.Yellow);
-                    DrawText.drawText("GAME MODE    (shift accel)", 700, 30, Color.Yellow);
-                    DrawText.drawText("Curr block #" +curr_block,400, 10, Color.Yellow);
-                    break;
-                case defines.MODO_CAMARA:
-                default:
-                    DrawText.drawText("CAm pos: " + Camara.Position.X + "," + Camara.Position.Y + "," + Camara.Position.Z, 5, 20, Color.Yellow);
-                    break;
-            }
-            */
-
             if (curr_mode == defines.MODO_GAME)
             {
                 DrawText.drawText("Bloques Completados: " + (int)(scene.Count - curr_block - 1), 400, 10, Color.Yellow);
@@ -1449,36 +1471,9 @@ namespace TGC.Group.Model
                         DrawText.drawText((int)intro_timer + "s para comenzar...", 400, 320, Color.Yellow);
                 }
             }
-
-            // debug colision
-            /*
-            // transformo el punto al espacio del block
-            Vector3 pt = ship_pos;
-            pt.TransformCoordinate(scene[curr_block].matInvWorldBlock);
-
-            {
-                Matrix O = Helper.MatrixfromBasis(
-                                        1, 0, 0,
-                                        0, 0, 1,
-                                        0, 1, 0
-                                        );
-                if (Math.Abs(ship_an + ship_an_base) > 0.001f)
-                    O = O * Matrix.RotationX(ship_an_base + ship_an);
-                if (Math.Abs(ship_anV) > 0.001f)
-                    O = O * Matrix.RotationY(ship_anV);
-                Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
-                Vector3 p = new Vector3(0, 0, 0);
-                p.TransformCoordinate(Matrix.Translation(collision_pt[0]) * T);
-                p.TransformCoordinate(scene[curr_block].matInvWorldBlock);
-                DrawText.drawText(      "X=" + (int)Math.Round(p.X,0) + 
-                                        "   Y=" + (int)Math.Round(p.Y,0) + 
-                                        "   Z=" + (int)Math.Round(p.Z,0), 400, 110, Color.Yellow);
-            }
-            */
-
             RenderFPS();
             device.EndScene();
-            device.Present();
+
         }
 
         public void RenderBloques()
@@ -1513,44 +1508,34 @@ namespace TGC.Group.Model
 
             if (render_ship)
             {
-                // render ship
-                Matrix O = Helper.MatrixfromBasis(
-                                        1, 0, 0,
-                                        0, 0, 1,
-                                        0, 1, 0
-                                        );
-                if (Math.Abs(ship_an + ship_an_base)> 0.001f )
-                    O = O * Matrix.RotationX(ship_an_base + ship_an);
-                if (Math.Abs(ship_anV) > 0.001f)
-                    O = O * Matrix.RotationY(ship_anV);
-
-                Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
-                effect.SetValue("ssao", 0);
-
-
-                Vector3 LP = ship_pos + ship_vel * 220 + ship_N*150;
-                effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
-                foreach (TgcMesh mesh in xwing)
-                {
-                    mesh.Transform = T;
-                    mesh.Technique = technique;
-                    mesh.render();
-                }
-                effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
-
-
-                // debug colision
-                // 
-                /*
-                if (cd_timer > 0 )
-                {
-                    Box.Technique = technique;
-                    Box.Transform = Matrix.Scaling(new Vector3(1, 1, 1)*(1-cd_timer)*30) * Matrix.Translation(collision_pt[cd_index]) * T;
-                    Box.render();
-                }*/
+                RenderShip(technique);
             }
+        }
 
+        public void RenderShip(String technique)
+        {
+            // render ship
+            Matrix O = Helper.MatrixfromBasis(
+                                    1, 0, 0,
+                                    0, 0, 1,
+                                    0, 1, 0
+                                    );
+            if (Math.Abs(ship_an + ship_an_base) > 0.001f)
+                O = O * Matrix.RotationX(ship_an_base + ship_an);
+            if (Math.Abs(ship_anV) > 0.001f)
+                O = O * Matrix.RotationY(ship_anV);
 
+            Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
+            effect.SetValue("ssao", 0);
+            Vector3 LP = ship_pos + ship_vel * 220 + ship_N * 150;
+            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
+            foreach (TgcMesh mesh in xwing)
+            {
+                mesh.Transform = T;
+                mesh.Technique = technique;
+                mesh.render();
+            }
+            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
 
         }
 

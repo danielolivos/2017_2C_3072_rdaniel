@@ -134,6 +134,27 @@ float lightIntensity; //Intensidad de la luz
 float lightAttenuation; //Factor de atenuacion de la luz
 float3 lightDir; 		//Luz direccional
 
+// shadow map
+#define SMAP_SIZE 1024
+#define EPSILON 0.0005f
+float4x4 g_mViewLightProj;
+float4x4 g_mProjLight;
+float3   g_vLightPos;  // posicion de la luz (en World Space) = pto que representa patch emisor Bj 
+float3   g_vLightDir;  // Direcion de la luz (en World Space) = normal al patch Bj
+
+texture  g_txShadow;	// textura para el shadow map
+sampler2D g_samShadow =
+sampler_state
+{
+    Texture = <g_txShadow>;
+    MinFilter = Point;
+    MagFilter = Point;
+    MipFilter = Point;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+
 struct VS_INPUT
 {
 	float4 Position : POSITION0;
@@ -150,7 +171,7 @@ struct VS_OUTPUT
 	float4 WorldNormalOcc : TEXCOORD2;			// xyz = normal w = off factor
 	float3 ViewVec	: TEXCOORD3;
 	float3 LightVec	: TEXCOORD4;
-
+	float4 vPosLight: TEXCOORD5;				// shadowmap
 };
 
 VS_OUTPUT vs_main(VS_INPUT input)
@@ -165,6 +186,8 @@ VS_OUTPUT vs_main(VS_INPUT input)
 	output.WorldNormalOcc.xyz = mul(input.Normal, matInverseTransposeWorld).xyz;
 	// factor de occlussion
 	output.WorldNormalOcc.w = 0.5 + input.Position.y/10.0;
+    // propago la posicion del vertice en el espacio de proyeccion de la luz
+    output.vPosLight = mul( float4(output.WorldPosition , 1), g_mViewLightProj );
 	return output;
 }
 
@@ -175,6 +198,8 @@ struct PS_INPUT
 	float4 WorldNormalOcc : TEXCOORD2;
 	float3 ViewVec	: TEXCOORD3;
 	float3 LightVec	: TEXCOORD4;
+	float4 vPosLight : TEXCOORD5;
+	
 };
 
 //Pixel Shader
@@ -192,7 +217,30 @@ float4 ps_main(PS_INPUT input) : COLOR0
 	float ks = saturate(dot(reflect(-Ln,Nn), Vn));
 	float3 specularLight = specularFactor * lightColor * materialSpecularColor *pow(ks,materialSpecularExp);
 	float4 finalColor = float4(saturate(materialEmissiveColor + ambientLight + diffuseLight) * texelColor + specularLight, materialDiffuseColor.a);
-	return finalColor  * occ_factor;
+
+	//shadow map
+	// esta al reves que el shadowmap estandard, si esta afuera del cono, hago de cuenta que esta iluminado.
+	// eso es porque la luz es "virtual", simula una luz ominidireccional
+	float I = 1;
+    float3 vLight = normalize( input.WorldPosition- g_vLightPos.xyz);
+	float cono = dot( vLight, g_vLightDir);
+	const float g_LightPhi = 0.5;
+	if( cono > g_LightPhi)
+    {
+		// coordenada de textura CT
+		float2 CT = 0.5 * input.vPosLight.xy / input.vPosLight.w + float2( 0.5, 0.5 );
+		CT.y = 1.0f - CT.y;
+		float zw = input.vPosLight.z / input.vPosLight.w;
+		//I = (tex2D( g_samShadow, CT) + EPSILON < input.vPosLight.z / input.vPosLight.w)? 0.0f: 1.0f;  
+        I = 0;
+        float r = 3;
+        for(int i=-r;i<=r;++i)
+			for(int j=-r;j<=r;++j)
+				I += (tex2D( g_samShadow, CT + float2((float)i/SMAP_SIZE, (float)j/SMAP_SIZE) ) + EPSILON < zw)? 0.0f: 1.0f;  
+		I /= (2*r+1)*(2*r+1);
+		
+	}
+	return finalColor  * occ_factor * I;
 	
 }
 
@@ -429,3 +477,43 @@ technique GaussianBlurSeparable
 
 }
 
+
+
+//-----------------------------------------------------------------------------
+// Vertex Shader que implementa un shadow map
+//-----------------------------------------------------------------------------
+void VertShadow( float4 Pos : POSITION,
+                 float3 Normal : NORMAL,
+                 out float4 oPos : POSITION,
+                 out float2 Depth : TEXCOORD0 )
+{
+	// transformacion estandard 
+    oPos = mul( Pos, matWorld);					// uso el del mesh
+    oPos = mul( oPos, g_mViewLightProj );		// pero visto desde la pos. de la luz
+    
+    // devuelvo: profundidad = z/w 
+    Depth.xy = oPos.zw;
+}
+
+//-----------------------------------------------------------------------------
+// Pixel Shader para el shadow map, dibuja la "profundidad" 
+//-----------------------------------------------------------------------------
+void PixShadow( float2 Depth : TEXCOORD0,out float4 Color : COLOR )
+{
+	// parche para ver el shadow map
+	//float k = Depth.x/Depth.y;
+	//Color = (1-k);
+	//Color = float4(1,0,1,1);
+    Color = Depth.x/Depth.y;
+	//Color = float4(0,0,0,1);
+
+}
+
+technique RenderShadow
+{
+    pass p0
+    {
+        VertexShader = compile vs_3_0 VertShadow();
+        PixelShader = compile ps_3_0 PixShadow();
+    }
+}
