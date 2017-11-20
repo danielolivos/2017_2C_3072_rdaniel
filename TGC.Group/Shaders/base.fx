@@ -4,7 +4,7 @@ float4x4 matWorldView; //Matriz World * View
 float4x4 matWorldViewProj; //Matriz World * View * Projection
 float4x4 matInverseTransposeWorld; //Matriz Transpose(Invert(World))
 float4x4 matProj;			// Projection
-float specularFactor = 3;
+float specularFactor = 0.7;
 
 static const float PI = 3.14159265f;
 
@@ -208,7 +208,6 @@ float4 ps_main(PS_INPUT input) : COLOR0
 	float occ_factor = ssao ? input.WorldNormalOcc.w : 1;
 	float3 Nn = normalize(input.WorldNormalOcc.xyz);
 	float3 Ln = normalize(input.LightVec);
-	//float3 Ln = lightDir;
 	float3 Vn = normalize(input.ViewVec);
 	float4 texelColor = tex2D(diffuseMap, input.Texcoord);
 	float3 ambientLight = lightColor * materialAmbientColor * occ_factor;
@@ -222,6 +221,7 @@ float4 ps_main(PS_INPUT input) : COLOR0
 	// esta al reves que el shadowmap estandard, si esta afuera del cono, hago de cuenta que esta iluminado.
 	// eso es porque la luz es "virtual", simula una luz ominidireccional
 	float I = 1;
+	
     float3 vLight = normalize( input.WorldPosition- g_vLightPos.xyz);
 	float cono = dot( vLight, g_vLightDir);
 	const float g_LightPhi = 0.5;
@@ -240,7 +240,8 @@ float4 ps_main(PS_INPUT input) : COLOR0
 		I /= (2*r+1)*(2*r+1);
 		
 	}
-	return finalColor  * occ_factor * I;
+	finalColor.rgb *= occ_factor * I;
+	return finalColor;
 	
 }
 
@@ -251,6 +252,11 @@ float4 ps_normal(PS_INPUT input) : COLOR0
 	return float4(Nn, 1);
 }
 
+
+float4 ps_glow(PS_INPUT input) : COLOR0
+{
+	return tex2D(diffuseMap, input.Texcoord);
+}
 
 technique DefaultTechnique
 {
@@ -268,6 +274,15 @@ technique NormalMap
 	{
 		VertexShader = compile vs_3_0 vs_main();
 		PixelShader = compile ps_3_0 ps_normal();
+	}
+}
+
+technique GlowMap
+{
+	pass Pass_0
+	{
+		VertexShader = compile vs_3_0 vs_main();
+		PixelShader = compile ps_3_0 ps_glow();
 	}
 }
 
@@ -395,7 +410,7 @@ float4 PSPostProcess(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) : COLOR0
 	Tex *= percent;
     Tex += center;
 	float2 TexG = Tex + float2(1.0/screen_dx , 1.0/screen_dy)*8.0;
-	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*8.0;
+	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*2.0;
 }
 
 technique PostProcess
@@ -449,7 +464,7 @@ void BlurH(float2 screen_pos  : TEXCOORD0,out float4 Color : COLOR)
 { 
     Color = 0;
 	for(int i=0;i<kernel_size;++i)
-		Color += tex2D(RenderTarget, screen_pos+float2((float)(i-kernel_r)/screen_dx,0)*kernel_escale) *inv_kernel_size;
+		Color += tex2D(RenderTarget, screen_pos+float2((float)(i-kernel_r)/screen_dx,0)*kernel_escale) * Kernel[i];
 	Color.a = 1;
 }
 
@@ -457,7 +472,7 @@ void BlurV(float2 screen_pos  : TEXCOORD0,out float4 Color : COLOR)
 { 
     Color = 0;
 	for(int i=0;i<kernel_size;++i)
-		Color += tex2D(RenderTarget, screen_pos+float2(0,(float)(i-kernel_r)/screen_dy)*kernel_escale) *inv_kernel_size;
+		Color += tex2D(RenderTarget, screen_pos+float2(0,(float)(i-kernel_r)/screen_dy)*kernel_escale) * Kernel[i];
 	Color.a = 1;
 
 }

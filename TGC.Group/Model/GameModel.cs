@@ -26,6 +26,31 @@ namespace TGC.Group.Model
         public const int MODO_TEST_BLOCK = 2;
     }
 
+    // Vertex format posicion y color
+    public struct VERTEX_POS_COLOR
+    {
+        public float x, y, z;		// Posicion
+        public int color;		// Color
+    };
+
+    public struct Disparo
+    {
+        public Vector3 Position;
+        public Vector3 Velocity;
+        public float timer;
+        public float delay;
+        public bool enemigo;
+        public bool draw;
+        public int block;
+    };
+
+    public struct Explosion
+    {
+        public Vector3 Position;
+        public float timer;
+        public float tiempo_explosion;
+    };
+
     public class Block
     {
         private static readonly Random random = new Random();
@@ -41,6 +66,7 @@ namespace TGC.Group.Model
         public Vector3 escale = new Vector3(1, 1.82f, 1) * k;
         public Matrix[] matWorld = new Matrix[500];
         public int[] mesh_index = new int[500];
+        public int[] mesh_type = new int[500];
         public Vector3[] pmin = new Vector3[500];
         public Vector3[] pmax = new Vector3[500];
         public int cant_mesh;
@@ -52,6 +78,9 @@ namespace TGC.Group.Model
         public Matrix matWorldBlock;            // matrix word de todo el block
         public Matrix matInvWorldBlock;
         public int cant_obstaculos = 3;
+        // torreta 
+        public int p_torreta = -1;           // nro de mesh que representa la torreta  (-1 si no tiene)
+        public float timer_disparo = 0;
 
 
         public static Matrix OrientTecho = Helper.MatrixfromBasis(1, 0, 0,
@@ -96,17 +125,10 @@ namespace TGC.Group.Model
                     Block0(OrientBlock);
                     break;
 
-                case 1:
-                    Block1(OrientBlock);
-                    break;
-
                 case 2:
                     Block2(OrientBlock);
                     break;
 
-                case 3:
-                    Block3(OrientBlock);
-                    break;
             }
             // calculo el bounding box de toto el bloque
             Matrix T = Orient * MatPos;
@@ -159,14 +181,29 @@ namespace TGC.Group.Model
             // Z+ es hacia derecha, Z- izquierda
 
             Matrix S = Matrix.Scaling(k,k,k);
+            Matrix O = Helper.MatrixfromBasis(0, 1, 0,
+                                             -1, 0, 0,
+                                              0, 0, -1);
+
 
             for (int i = 0; i < cant_obstaculos; ++i)
             {
-                int q = tipo_o++ % 6;
-                if (random.Next(0, 100) > 25)
-                    q = tipo_o++ % 6;
-                if (random.Next(0, 100) > 25)
-                    q = tipo_o++ % 6;
+                int q;
+                if (random.Next(0, 100) < 25 && p_torreta == -1)
+                {
+                    // creo una torreta que dispara (solo puede haber una por block)
+                    q = 6;
+                    // y me guado el indice para actualizar los disparos 
+                    p_torreta = t;
+                }
+                else
+                {
+                    q = tipo_o++ % 7;
+                    if (random.Next(0, 100) < 25)
+                        q = tipo_o++ % 7;
+                    if (random.Next(0, 100) < 25)
+                        q = tipo_o++ % 7;
+                }
 
                 float X = (-0.5f + 1.0f / (cant_obstaculos + 1) * (1 + i)) * largo;
                 float xdesde = 0, xhasta = 0, ydesde = 0, yhasta = 0, zdesde = 0, zhasta = 0;
@@ -178,56 +215,73 @@ namespace TGC.Group.Model
                     case 0:
                         // abajo
                         zdesde = -10; zhasta = 10; ydesde = -10; yhasta = 0.25f;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 1, 2))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.0f, 1, 2)) 
                             * Matrix.Translation(new Vector3(X, -5, 0)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 2;
                         break;
                     case 1:
                         // arriba
                         zdesde = -10; zhasta = 10; ydesde = -0.25f; yhasta = 10;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 1, 2))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.0f, 1, 2))
                             * Matrix.Translation(new Vector3(X, 5, 0)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 2;
                         break;
                     case 2:
                         // izquierda
                         zdesde = -10; zhasta = 0.25f; ydesde = -10; yhasta = 10;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 2, 1))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.1f, 2, 1))
                             * Matrix.Translation(new Vector3(X, 0, -5)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 0;
                         break;
 
                     case 3:
                         // derecha
                         zdesde = -0.25f; zhasta = 10; ydesde = -10; yhasta = 10;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 2, 1))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.1f, 2, 1))
                             * Matrix.Translation(new Vector3(X, 0, 5)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 0;
                         break;
 
                     case 4:
                         // izquierda y derecha
                         zdesde = -10; zhasta = -2.5f; ydesde = -10; yhasta = 10;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 2, 0.6f))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.1f, 2, 0.6f)) 
                             * Matrix.Translation(new Vector3(X, 0, -6)) * OrientBlock * Orient * MatPos;
                         pmin[t] = new Vector3(xdesde, ydesde, zdesde);
                         pmax[t] = new Vector3(xhasta, yhasta, zhasta);
-                        mesh_index[t++] = 6;
+                        mesh_type[t] = 1;
+                        mesh_index[t++] = 3;
 
                         zdesde = 2.5f; zhasta = 10; ydesde = -10; yhasta = 10;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 2, 0.6f))
+                        matWorld[t] = S *O * Matrix.Scaling(new Vector3(4.1f, 2, 0.6f))
                             * Matrix.Translation(new Vector3(X, 0, 6)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 0;
                         break;
 
                     case 5:
                         // arriba y abajo
                         zdesde = -10; zhasta = 10; ydesde = -10; yhasta = -2.5f;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 0.6f, 2))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.1f, 0.6f, 2))
                             * Matrix.Translation(new Vector3(X, -6, 0)) * OrientBlock * Orient * MatPos;
                         pmin[t] = new Vector3(xdesde, ydesde, zdesde);
                         pmax[t] = new Vector3(xhasta, yhasta, zhasta);
-                        mesh_index[t++] = 6;
+                        mesh_type[t] = 1;
+                        mesh_index[t++] = 3;
 
                         zdesde = -10; zhasta = 10; ydesde = 2.5f; yhasta = 10;
-                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.1f, 0.6f, 2))
+                        matWorld[t] = S * O * Matrix.Scaling(new Vector3(4.1f, 0.6f, 2))
                             * Matrix.Translation(new Vector3(X, 6, 0)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 0;
                         break;
+
+                    case 6:
+                        // torreta abajo
+                        zdesde = -3; zhasta = 3; ydesde = -10; yhasta = 0.25f;
+                        matWorld[t] = S * Matrix.Scaling(new Vector3(0.7f, 0.7f, 0.7f)) * Matrix.RotationY(FastMath.PI)
+                            * Matrix.Translation(new Vector3(X,-5,0)) * OrientBlock * Orient * MatPos;
+                        mesh_index[t] = 5;
+                        break;
+
 
 
                 }
@@ -235,7 +289,12 @@ namespace TGC.Group.Model
                 // almaceno el bounding box del obstaculo
                 pmin[t] = new Vector3(xdesde, ydesde, zdesde);
                 pmax[t] = new Vector3(xhasta, yhasta, zhasta);
-                mesh_index[t++] = 6;
+                mesh_type[t] = 1;
+                ++t;
+
+                // los bloques con torreta, no tienen ninguna otra cosa mas
+                if (i == 6)
+                    break;
             }
 
             return t;
@@ -264,72 +323,16 @@ namespace TGC.Group.Model
             }
 
             for (int i = 0; i < t; ++i)
+            {
+                mesh_type[t] = 0;           // paredes, techos, etc
                 mesh_index[i] = random.Next(0, 5);
+            }
 
             cant_mesh = CreateObstaculo(OrientBlock, t);
 
         }
 
 
-        public void Block1(Matrix OrientBlock)
-        {
-            int prof = 2;       // profundidad del trench
-            // piso y techo
-            int t = 0;
-            for (int q = -r; q < r; ++q)
-            {
-                int i, i1, j, j1;
-                if (q <= 0)
-                {
-                    i = i1 = q;
-                    j = -1;
-                    j1 = 0;
-                }
-                else
-                {
-                    j = j1 = q;
-                    i = -1;
-                    i1 = 0;
-                }
-                //  piso
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10 + 5, -10 * (prof - 1), j * 10 + 5)) * OrientBlock * Orient * MatPos;
-                ++t;
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i1 * 10 + 5, -10 * (prof - 1), j1 * 10 + 5)) * OrientBlock * Orient * MatPos;
-                ++t;
-
-                //  techo
-                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10 + 5, 10, j * 10 + 5)) * OrientBlock * Orient * MatPos;
-                ++t;
-                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i1 * 10 + 5, 10, j1 * 10 + 5)) * OrientBlock * Orient * MatPos;
-                ++t;
-
-                // pared
-                for (int s = 0; s < prof; ++s)
-                {
-                    if (q <= 0)
-                    {
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10 + 5, 5 - 10 * s, j * 10)) * OrientBlock * Orient * MatPos;
-                        if (q < -1)
-                            matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i1 * 10 + 5, 5 - 10 * s, j1 * 10 + 10)) * OrientBlock * Orient * MatPos;
-                    }
-                    else
-                    {
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(i * 10, 5 - 10 * s, j * 10 + 5)) * OrientBlock * Orient * MatPos;
-                        matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(i1 * 10 + 10, 5 - 10 * s, j1 * 10 + 5)) * OrientBlock * Orient * MatPos;
-                    }
-
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10, 5 - 10 * s, -5)) * OrientBlock * Orient * MatPos;
-                    matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10, 5 - 10 * s, 5)) * OrientBlock * Orient * MatPos;
-                }
-            }
-
-
-            for (int i = 0; i < t; ++i)
-                mesh_index[i] = random.Next(0, 5);
-
-            cant_mesh = t;
-
-        }
 
         public void Block2(Matrix OrientBlock)
         {
@@ -353,85 +356,16 @@ namespace TGC.Group.Model
 
 
             for (int i = 0; i < t; ++i)
+            {
+                mesh_type[t] = 0;           // paredes, techos, etc
                 mesh_index[i] = random.Next(0, 5);
+            }
 
             cant_mesh = CreateObstaculo(OrientBlock, t);
         }
 
-
-        public void Block3(Matrix OrientBlock)
-        {
-            int prof = 2;       // profundidad del trench
-            // piso y techo
-            int t = 0;
-            for (int i = -r; i < r; ++i)
-            {
-                //  piso
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10+5, -10 * (prof - 1), 5)) * OrientBlock * Orient * MatPos;
-                ++t;
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(i * 10+5, -10 * (prof - 1), -5)) * OrientBlock * Orient * MatPos;
-                ++t;
-
-
-                
-                //  techo
-                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10+5, 10, 5)) * OrientBlock * Orient * MatPos;
-                ++t;
-                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(i * 10+5, 10, -5)) * OrientBlock * Orient * MatPos;
-                ++t;
-
-                
-                // pared
-                if(i!=0 && i!=-1)
-                for (int s = 0; s < prof; ++s)
-                {
-                   matWorld[t++] = Matrix.Scaling(escale) * OrientParedI * Matrix.Translation(new Vector3(i * 10+5, 5 - 10 * s, 10)) * OrientBlock * Orient * MatPos;
-                   matWorld[t++] = Matrix.Scaling(escale) * OrientPared * Matrix.Translation(new Vector3(i * 10+5, 5 - 10 * s, -10)) * OrientBlock * Orient * MatPos;
-                }
-            }
-
-            for (int i = -r; i < r; ++i)
-             if (i != 0 && i != -1)
-             {
-                //  piso
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(5, -10 * (prof - 1), i * 10+5)) * OrientBlock * Orient * MatPos;
-                ++t;
-                matWorld[t] = Matrix.Scaling(escale) * Matrix.Translation(new Vector3(-5, -10 * (prof - 1), i* 10+5)) * OrientBlock * Orient * MatPos;
-                ++t;
-
-                
-                //  techo
-                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(5, 10, i * 10+5)) * OrientBlock * Orient * MatPos;
-                ++t;
-                matWorld[t] = Matrix.Scaling(escale) * OrientTecho * Matrix.Translation(new Vector3(-5, 10, i * 10+5)) * OrientBlock * Orient * MatPos;
-                ++t;
-
-                
-                // pared
-                for (int s = 0; s < prof; ++s)
-                {
-                   matWorld[t++] = Matrix.Scaling(escale) * OrientParedD * Matrix.Translation(new Vector3(10, 5 - 10 * s, i * 10+5)) * OrientBlock * Orient * MatPos;
-                   matWorld[t++] = Matrix.Scaling(escale) * OrientParedU * Matrix.Translation(new Vector3(-10, 5 - 10 * s, i * 10+5)) * OrientBlock * Orient * MatPos;
-                }
-                
-            }
-
-
-            for (int i = 0; i < t; ++i)
-                mesh_index[i] = random.Next(0, 5);
-
-            cant_mesh = t;
-
-        }
-
-
-
         public bool render()
         {
-           // var r = TgcCollisionUtils.classifyFrustumAABB(model.Frustum, BoundingBox);
-           // if (r == TgcCollisionUtils.FrustumResult.OUTSIDE)
-           //     return false;
-            
             float dist = (Position - model.Camara.Position).LengthSq();
 
             if (model.curr_mode == defines.MODO_GAME)
@@ -448,18 +382,52 @@ namespace TGC.Group.Model
                 int index = mesh_index[i];
                 if (index != -1 )
                 {
+                    
                     if (dist>20000 && index <= 5)
                         index += 7;
                     model.meshes[index].Transform = matWorld[i];
                     TgcShaders.Instance.setShaderMatrix(model.effect, matWorld[i]);
-                    model.effect.SetValue("ssao", index==6?0:1);
+                    model.effect.SetValue("ssao", index==5 || index==12 ?0:1);
                     model.effect.CommitChanges();
-                    model.meshes[index].D3dMesh.DrawSubset(0);
+                    // caso particular: la torreta tiene todo en el layer 25 y no tengo el sketchup para corregirlo
+                    model.meshes[index].D3dMesh.DrawSubset(index == 5 || index == 12 ? 25 : 0);
                 }
             }
             return true;
         }
 
+        public void Update()
+        {
+            // actualizo solo el current block y los n siguientes (que como va al reves, son los anteriores)
+            if (p_torreta == -1)
+                return;     // no tiene lo que hacer de momento
+
+            // verifico el timer de la torreta (si es cero, hago un disparo)
+            if(timer_disparo==0)
+            {
+                int p = model.p_disparo++;
+                if (model.p_disparo >= model.disparos.Length)
+                    model.p_disparo = 0;
+
+                model.disparos[p].enemigo = true;
+                model.disparos[p].timer = 0.5f;
+                model.disparos[p].delay = 0.0f;
+                Vector3 pt = new Vector3(0, 45, 0);
+                pt.TransformCoordinate(matWorld[p_torreta]);
+                model.disparos[p].Position = pt;
+                Vector3 d = new Vector3(20, 1, 0);
+                d.TransformNormal(matWorld[p_torreta]);
+                d.Normalize();
+                model.disparos[p].Velocity = d;
+                timer_disparo = 0.3f;
+            }
+            else
+            {
+                timer_disparo -= model.ElapsedTime;
+                if (timer_disparo < 0)
+                    timer_disparo = 0;
+            }
+        }
 
         public bool colisiona(Vector3 pt)
         {
@@ -467,7 +435,7 @@ namespace TGC.Group.Model
             pt.TransformCoordinate(matInvWorldBlock);
 
             // choca contra las paredes
-            if (pt.Z > 10 || pt.Z < -10)
+            if (pt.Z > 10 || pt.Z < -10 || pt.Y<-10)
                 return true;
 
             // nota: en el espacio del bloque 
@@ -478,14 +446,9 @@ namespace TGC.Group.Model
             bool rta = false;
             for (int i = 0; i < cant_mesh && !rta; ++i)
             {
-                if(mesh_index[i]==6)
+                if(mesh_type[i]==1)
                 {
                     // obstaculo
-                    if (pt.Z >= 0)
-                    {
-                        int bp = 1;
-                    }
-
                     if (pt.Z >= pmin[i].Z && pt.Z <= pmax[i].Z && 
                         pt.Y >= pmin[i].Y && pt.Y <= pmax[i].Y &&
                         pt.X >= pmin[i].X && pt.X <= pmax[i].X)
@@ -535,7 +498,7 @@ namespace TGC.Group.Model
         public TgcBox LODMesh;
 
         public float star_r = 8000;
-        public float ship_k = 0.09f;
+        public Vector3 ship_k = new Vector3(0.09f , 0.09f , 0.11f);
         public Vector3 ship_vel;
         public Vector3 ship_N;
         public Vector3 ship_bitan;
@@ -550,7 +513,7 @@ namespace TGC.Group.Model
         public Vector3 target_pos = new Vector3(1, 0, 0);
         public List<Block> scene = new List<Block>();
         public List<Block> trench = new List<Block>();
-        int curr_block;
+        public int curr_block;
         public Vector3[] collision_pt = new Vector3[5];
         public int cant_cpt = 5;        // cantidad de puntos de colision
         public int cd_index = 0;        // colision detectada
@@ -559,8 +522,9 @@ namespace TGC.Group.Model
         public float intro_timer = 10;   // timer de introduccion
         public float r_timer = 0;      // timer de resurreccion
         public Vector4 _Sphere;
-        
-  
+
+
+
 
         private static readonly Random random = new Random();
 
@@ -589,6 +553,13 @@ namespace TGC.Group.Model
         public float xm, ym;     // pos del mouse
         public float wm;
         public int eventoInterno = 0;
+
+        // disparos
+        public Disparo[] disparos = new Disparo[255];
+        public int p_disparo = 0;
+        // explosiones
+        public Explosion[] explosiones = new Explosion[4];
+        public int p_explosion = 0;
 
 
         public override void Init()
@@ -640,8 +611,8 @@ namespace TGC.Group.Model
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m4-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m5-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "torreta-TgcScene.xml").Meshes[0]);       // 5
-            meshes.Add(TgcBox.fromSize(new Vector3(100, 100, 100), textura_surface).toMesh("q2"));
-            //meshes.Add(loader.loadSceneFromFile(MediaDir + "q2-TgcScene.xml").Meshes[0]);          // 6
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "m3-TgcScene.xml").Meshes[0]);
+            //meshes.Add(TgcBox.fromSize(new Vector3(100, 100, 100), textura_surface).toMesh("q2"));
             meshes.Add(loader.loadSceneFromFile(MediaDir + "x1-TgcScene.xml").Meshes[0]);               // 7
             meshes.Add(loader.loadSceneFromFile(MediaDir + "x2-TgcScene.xml").Meshes[0]);               // 8
             meshes.Add(loader.loadSceneFromFile(MediaDir + "x3-TgcScene.xml").Meshes[0]);               // 9
@@ -683,7 +654,6 @@ namespace TGC.Group.Model
 
             var textura_skybox = TgcTexture.createTexture(MediaDir + "Textures\\Color A05.png");
             effect.SetValue("texSkybox", textura_skybox.D3dTexture);
-            effectExplosion.SetValue("texSkybox", textura_skybox.D3dTexture);
             textura_bloques = TgcTexture.createTexture(MediaDir + "Textures\\4.png").D3dTexture;
 
             // puntos de colision de la nave
@@ -693,7 +663,12 @@ namespace TGC.Group.Model
             collision_pt[3] = new Vector3(0, 10, 50);            // ala derecha
             collision_pt[4] = new Vector3(50, 0, 0);          // frente
 
-
+            // sistema de disparos
+            for (int i = 0; i < disparos.Length; ++i)
+                disparos[i].timer = 0;
+            // sistema de explosiones
+            for (int i = 0; i < explosiones.Length; ++i)
+                explosiones[i].timer = 0;
 
         }
 
@@ -740,21 +715,6 @@ namespace TGC.Group.Model
                 {
                     cameraPosition = new Vector3(0,100, 10);
                     lookAt = new Vector3(0, 0, 0);
-
-
-                    // test de explosion
-                    /*
-                    cameraPosition = new Vector3(-4.844278f, -200.8399f, 7989.138f);
-                    lookAt = new Vector3(-7.664487f, -210.4348f, 7988.982f);
-                    _Sphere = new Vector4(-10.02304f, -209.638f, 7986.195f, 1.0f);
-                    */
-
-                    /*
-                    cameraPosition = new Vector3(20, 0,0);
-                    lookAt = new Vector3(0,0,0);
-                    _Sphere = new Vector4(0, 0, 0, 1.0f);
-                    */
-
                 }
                 Camara.SetCamera(cameraPosition, lookAt , new Vector3(0,1,0));
             }
@@ -863,6 +823,8 @@ namespace TGC.Group.Model
             float aspectRatio = (float)d3dDevice.PresentationParameters.BackBufferWidth / (float)d3dDevice.PresentationParameters.BackBufferHeight;
             g_mShadowProj = Matrix.PerspectiveFovLH(Geometry.DegreeToRadian(60),aspectRatio, 1, 50000);
 
+
+
         }
 
         public void InitLighting()
@@ -887,6 +849,9 @@ namespace TGC.Group.Model
             effectBase.SetValue("materialSpecularColor", ColorValue.FromColor(Color.FromArgb(240, 204, 155)));
             effectBase.SetValue("materialSpecularExp", (float)40);
             effectBase.SetValue("specularFactor", (float)1.3);
+
+
+            
         }
 
 
@@ -916,7 +881,15 @@ namespace TGC.Group.Model
             if (ElapsedTime < 0 || ElapsedTime > 10)
                 return;
 
-            // timers
+            // actualizo los blockes
+            if (curr_mode == defines.MODO_GAME && curr_block>2)
+            {
+                scene[curr_block - 1].Update();
+            }
+            // los disparos
+            UpdateDisparos();
+
+            // los timers
             time += ElapsedTime;
             if (intro_timer > 0)
             {
@@ -938,8 +911,6 @@ namespace TGC.Group.Model
                     explosion_timer = 0;
                     ship_speed = 250;
                     // crash
-                    // ship_pos = new Vector3(0, 50, star_r - 15);
-                    //ship_pos = scene[scene.Count - 1].Position;
                     ship_pos = scene[curr_block].Position;
                     ship_vel = new Vector3(0, -1, 0);
                     ship_N = new Vector3(0, 0, 1);
@@ -961,6 +932,37 @@ namespace TGC.Group.Model
             if (Input.keyDown(Microsoft.DirectX.DirectInput.Key.Space) && intro_timer != 0)
                 intro_timer = 0.0001f;
 
+            if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.A))
+            {
+
+                Matrix O = Helper.MatrixfromBasis(
+                                                    1, 0, 0,
+                                                    0, 0, 1,
+                                                    0, 1, 0
+                                                    );
+                if (Math.Abs(ship_an + ship_an_base) > 0.001f)
+                    O = O * Matrix.RotationX(ship_an_base + ship_an);
+                if (Math.Abs(ship_anV) > 0.001f)
+                    O = O * Matrix.RotationY(ship_anV);
+                Matrix T = O * Helper.CalcularMatriz(ship_pos, ship_k, ship_vel, ship_bitan, ship_N);
+                Vector3[] p = new Vector3[cant_cpt];
+                for (int s = 0; s < cant_cpt; ++s)
+                {
+                    p[s] = new Vector3(0, 0, 0);
+                    p[s].TransformCoordinate(Matrix.Translation(collision_pt[s]) * T);
+
+                    disparos[p_disparo].timer = 0.5f;
+                    disparos[p_disparo].delay = 0.05f * s;
+                    disparos[p_disparo].Position = p[s];
+                    disparos[p_disparo].Velocity = ship_vel;
+                    disparos[p_disparo].enemigo = false;
+                    p_disparo++;
+                    if (p_disparo >= disparos.Length)
+                        p_disparo = 0;
+
+                }
+
+            }
 
 
             if (Input.keyDown(Microsoft.DirectX.DirectInput.Key.LeftControl))
@@ -1171,7 +1173,7 @@ namespace TGC.Group.Model
                     if (Math.Abs(ship_anV) > 0.001f)
                         O = O * Matrix.RotationY(ship_anV);
 
-                    Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
+                    Matrix T = O * Helper.CalcularMatriz(ship_pos, ship_k, ship_vel, ship_bitan, ship_N);
                     Vector3[] p = new Vector3[cant_cpt];
                     for (int s = 0; s < cant_cpt; ++s)
                     {
@@ -1185,6 +1187,7 @@ namespace TGC.Group.Model
                         if (scene[curr_block].colisiona(p[s]))
                         {
                             colisiona = true;
+                            // hago explotar la nave
                             explosion_timer = tiempo_explosion;
                             cd_index = s;
                         }
@@ -1206,7 +1209,7 @@ namespace TGC.Group.Model
                 Vector3 ViewDir = Camara.LookAt - Camara.Position;
                 float cam_dist = ViewDir.Length();
                 ViewDir.Normalize();
-                Vector3 desired_LF = ship_pos - ship_vel * 15 + ship_N * 2.0f;
+                Vector3 desired_LF = ship_pos - ship_vel * 30 + ship_N * 1.5f;
                 Vector3 desired_LA = ship_pos + ship_N * 2.0f;
                 Vector3 cam_N = ship_pos;
                 cam_N.Normalize();
@@ -1224,7 +1227,7 @@ namespace TGC.Group.Model
             var device = D3DDevice.Instance.Device;
             // Calculo la matriz de view de la luz
             // pongo la luz arriba de la nave
-            Vector3 LP = ship_pos + ship_N * 30 - ship_vel*50;
+            Vector3 LP = ship_pos + ship_N * 30 - ship_vel*50 - ship_bitan * 10;
             Vector3 LPat = ship_pos ;
             Vector3 LDir = LPat - LP;
             LDir.Normalize();
@@ -1267,11 +1270,13 @@ namespace TGC.Group.Model
 
 
 
+
         public override void Render()
         {
 
             //Genero el shadow map
             RenderShadowMap();
+
 
             var device = D3DDevice.Instance.Device;
             var pOldRT = device.GetRenderTarget(0);
@@ -1282,35 +1287,12 @@ namespace TGC.Group.Model
             device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
             device.BeginScene();
 
-            
+            effect = effectBase;
+            RenderScene("DefaultTechnique");
+
             if (curr_mode == defines.MODO_GAME)
             {
-                // dibujo el quad pp dicho :
-                if (explosion_timer > 0)
-                {
-                    effect = effectExplosion;
-                    float t = (tiempo_explosion - explosion_timer) / tiempo_explosion;
-                    effect.Technique = "Explosion";
-                    Matrix O = Helper.MatrixfromBasis(
-                                            1, 0, 0,
-                                            0, 0, 1,
-                                            0, 1, 0
-                                            );
-                    if (Math.Abs(ship_an + ship_an_base) > 0.001f)
-                        O = O * Matrix.RotationX(ship_an_base + ship_an);
-                    if (Math.Abs(ship_anV) > 0.001f)
-                        O = O * Matrix.RotationY(ship_anV);
-                    Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
-                    Vector3 pt = new Vector3(0, 0, 0);
-                    pt.TransformCoordinate(Matrix.Translation(collision_pt[cd_index]) * T);
-                    effect.SetValue("_Sphere", new Vector4(pt.X, pt.Y, pt.Z, 10.0f*t + 0.5f));
-                    effect.SetValue("_NoiseAmp", -10f * t);
-                    effect.SetValue("_NoiseFreq", 1.1f);
-
-                }
-                else
-                    effect.Technique = "SkyBox";
-
+                effect.Technique = "SkyBox";
                 device.VertexFormat = CustomVertex.PositionTextured.Format;
                 device.SetStreamSource(0, g_pVBV3D, 0);
                 Vector3 ViewDir = Camara.LookAt - Camara.Position;
@@ -1346,36 +1328,72 @@ namespace TGC.Group.Model
                 device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
                 effect.EndPass();
                 effect.End();
+
+                // explosion?
+                if (explosion_timer > 0)
+                {
+                    effect = effectExplosion;
+                    float t = (tiempo_explosion - explosion_timer) / tiempo_explosion;
+                    effect.Technique = "Explosion";
+                    Matrix O = Helper.MatrixfromBasis(
+                                            1, 0, 0,
+                                            0, 0, 1,
+                                            0, 1, 0
+                                            );
+                    if (Math.Abs(ship_an + ship_an_base) > 0.001f)
+                        O = O * Matrix.RotationX(ship_an_base + ship_an);
+                    if (Math.Abs(ship_anV) > 0.001f)
+                        O = O * Matrix.RotationY(ship_anV);
+                    Matrix T = O * Helper.CalcularMatriz(ship_pos, ship_k, ship_vel, ship_bitan, ship_N);
+                    Vector3 pt = new Vector3(0, 0, 0);
+                    pt.TransformCoordinate(Matrix.Translation(collision_pt[cd_index]) * T);
+                    device.SetRenderState(RenderStates.AlphaBlendEnable, true);
+                    effect.SetValue("_Sphere", new Vector4(pt.X, pt.Y, pt.Z, 30.0f * t + 0.5f));
+                    effect.SetValue("_NoiseAmp", -30f * t);
+                    effect.SetValue("_NoiseFreq", 0.4f);
+                    //effect.SetValue("_ExploAlpha", 1 - t);
+                    effect.SetValue("LookFrom", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
+                    effect.SetValue("ViewDir", TgcParserUtils.vector3ToFloat4Array(ViewDir));
+                    effect.SetValue("Dx", TgcParserUtils.vector3ToFloat4Array(Dx));
+                    effect.SetValue("Dy", TgcParserUtils.vector3ToFloat4Array(Dy));
+                    effect.SetValue("MatProjQ", Q);
+                    effect.SetValue("Zn", Zn);
+                    effect.SetValue("Zf", Zf);
+                    effect.Begin(FX.None);
+                    effect.BeginPass(3);        // 3 = 32 pasos x explosion
+                    device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
+                    effect.EndPass();
+                    effect.End();
+
+                }
+
+
+
             }
-            effect = effectBase;
-            RenderScene("DefaultTechnique");
+            RenderExplosiones();
             device.EndScene();
             pSurf.Dispose();
+
+            effect = effectBase;
+            RenderDisparos();
 
             if (explosion_timer == 0)
             {
                 // glow effect
-                // 1er pasada: downfilter x 4
+                // 1er pasada: Genero el glowmap
                 // -----------------------------------------------------
                 pSurf = g_pRenderTarget4.GetSurfaceLevel(0);
                 device.SetRenderTarget(0, pSurf);
                 device.BeginScene();
-                effect.Technique = "DownFilter4";
-                device.VertexFormat = CustomVertex.PositionTextured.Format;
-                device.SetStreamSource(0, g_pVBV3D, 0);
-                effect.SetValue("g_RenderTarget", g_pRenderTarget);
                 device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
-                effect.Begin(FX.None);
-                effect.BeginPass(0);
-                device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
-                effect.EndPass();
-                effect.End();
+                effect.Technique = "GlowMap";
+                RenderShip("GlowMap");
+                RenderDisparos();
                 pSurf.Dispose();
                 device.EndScene();
-                device.DepthStencilSurface = pOldDS;
 
                 // Pasadas de blur
-                for (int P = 0; P < 3; ++P)
+                for (int P = 0; P < 1; ++P)
                 {
                     // Gaussian blur Horizontal
                     // -----------------------------------------------------
@@ -1429,7 +1447,7 @@ namespace TGC.Group.Model
             device.VertexFormat = CustomVertex.PositionTextured.Format;
             device.SetStreamSource(0, g_pVBV3D, 0);
             effect.SetValue("g_RenderTarget", g_pRenderTarget);
-            effect.SetValue("g_RenderTarget4", g_pRenderTarget4Aux);
+            effect.SetValue("g_RenderTarget4", g_pRenderTarget4);
             effect.SetValue("g_Position", g_pPosition);
             effect.SetValue("g_Normal", g_pNormal);
             effect.SetValue("matProj", device.Transform.Projection);
@@ -1448,6 +1466,8 @@ namespace TGC.Group.Model
             RenderHUD();
             device.Present();
         }
+
+     
 
         public void RenderHUD()
         {
@@ -1476,8 +1496,152 @@ namespace TGC.Group.Model
 
         }
 
+
+        public void RenderExplosiones()
+        {
+            var device = D3DDevice.Instance.Device;
+            device.SetRenderState(RenderStates.AlphaBlendEnable, true);
+            for (int i=0;i<explosiones.Length;++i)
+            {
+                if (explosiones[i].timer > 0)
+                {
+                    explosiones[i].timer -= ElapsedTime;
+                    if (explosiones[i].timer < 0)
+                        explosiones[i].timer = 0;
+                    else
+                    {
+                        // dibujo la explosion pp dicha
+                        effect = effectExplosion;
+                        float t = (explosiones[i].tiempo_explosion - explosiones[i].timer) / explosiones[i].tiempo_explosion;
+                        effect.Technique = "Explosion";
+                        Vector3 pt = explosiones[i].Position;
+                        effect.SetValue("_Sphere", new Vector4(pt.X, pt.Y, pt.Z, 3.0f * t + 1.0f ));
+                        effect.SetValue("_NoiseAmp", -10f * t);
+                        effect.SetValue("_NoiseFreq", 1.1f);
+                        effect.SetValue("_ExploAlpha", 1-t);
+                        device.VertexFormat = CustomVertex.PositionTextured.Format;
+                        device.SetStreamSource(0, g_pVBV3D, 0);
+                        Vector3 ViewDir = Camara.LookAt - Camara.Position;
+                        ViewDir.Normalize();
+                        Vector3 Up = curr_mode == defines.MODO_CAMARA ? new Vector3(0, 1, 0) : ship_N;
+                        Vector3 U, V;
+                        V = Vector3.Cross(ViewDir, Up);
+                        V.Normalize();
+                        U = Vector3.Cross(V, ViewDir);
+                        U.Normalize();
+                        float fov = D3DDevice.Instance.FieldOfView;
+                        float W = device.PresentationParameters.BackBufferWidth;
+                        float H = device.PresentationParameters.BackBufferHeight;
+                        float k = 2 * FastMath.Tan(fov / 2) / H;
+                        Vector3 Dy = U * k;
+                        Vector3 Dx = V * k;
+                        float Zn = D3DDevice.Instance.ZNearPlaneDistance;
+                        float Zf = D3DDevice.Instance.ZFarPlaneDistance;
+                        float Q = Zf / (Zf - Zn);
+
+                        effect.SetValue("LookFrom", TgcParserUtils.vector3ToFloat4Array(Camara.Position));
+                        effect.SetValue("ViewDir", TgcParserUtils.vector3ToFloat4Array(ViewDir));
+                        effect.SetValue("Dx", TgcParserUtils.vector3ToFloat4Array(Dx));
+                        effect.SetValue("Dy", TgcParserUtils.vector3ToFloat4Array(Dy));
+                        effect.SetValue("MatProjQ", Q);
+                        effect.SetValue("Zn", Zn);
+                        effect.SetValue("Zf", Zf);
+                        effect.Begin(FX.None);
+                        effect.BeginPass(1);            // 1 = 8 pasos x explosion
+                        device.DrawPrimitives(PrimitiveType.TriangleStrip, 0, 2);
+                        effect.EndPass();
+                        effect.End();
+                    }
+                }
+            }
+        }
+
+
+
+        public void UpdateDisparos()
+        {
+            float speed = 300;
+            for (int i = 0; i < disparos.Length; ++i)
+            {
+                disparos[i].draw = false;
+                if (disparos[i].delay > 0)
+                {
+                    disparos[i].delay -= ElapsedTime;
+                }
+                else
+                if (disparos[i].timer > 0)
+                {
+                    disparos[i].timer -= ElapsedTime;
+                    if (disparos[i].timer < 0)
+                    {
+                        disparos[i].timer = 0;      // termina el disparo
+                    }
+                    else
+                    {
+                        Vector3 p0 = disparos[i].Position;
+                        if (!disparos[i].enemigo)
+                        {
+                            // en que bloque esta el disparo
+                            int fire_block = curr_block;
+                            float min_dist = (scene[curr_block].Position - p0).LengthSq();
+                            for (int t = 1; t < 5; ++t)
+                            {
+                                float dist = (scene[curr_block - t].Position - p0).LengthSq();
+                                if (dist < min_dist)
+                                {
+                                    fire_block = curr_block - t;
+                                    min_dist = dist;
+                                }
+                            }
+                            disparos[i].block = fire_block;
+                            if (scene[fire_block].colisiona(p0))
+                            {
+                                disparos[i].timer = 0;      // termina el disparo
+                                explosiones[p_explosion].tiempo_explosion = explosiones[p_explosion].timer = 2.0f;
+                                explosiones[p_explosion].Position = p0;
+                                if (++p_explosion >= explosiones.Length)
+                                    p_explosion = 0;
+                            }
+                            else
+                            {
+                                // lo marco para dibujar
+                                disparos[i].draw = true;
+                            }
+                        }
+                        else
+                        {
+                            // lo marco para dibujar
+                            disparos[i].draw = true;
+                        }
+                    }
+                }
+                // actualizo la pos. del disparo
+                disparos[i].Position += disparos[i].Velocity * speed * ElapsedTime;
+
+            }
+        }
+
+        public void RenderDisparos()
+        {
+            var device = D3DDevice.Instance.Device;
+            for (int i = 0; i < disparos.Length; ++i)
+            {
+                if (disparos[i].draw)
+                {
+                    Vector3 p0 = disparos[i].Position;
+                    Vector3 p1 = p0 + disparos[i].Velocity * 50;
+                    DrawLine(p0, p1, ship_N, 0.1f,
+                        disparos[i].enemigo ?   Color.FromArgb(255, 0, 255, 255) : 
+                                                Color.FromArgb(255, 255, 255, 0));
+                }
+            }
+        }
+
+
         public void RenderBloques()
         {
+
+            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(ship_pos + ship_N*1000));
             effect.SetValue("texDiffuseMap", textura_bloques);
             effect.SetValue("ssao", 1);
             effect.Begin(0);
@@ -1525,19 +1689,81 @@ namespace TGC.Group.Model
             if (Math.Abs(ship_anV) > 0.001f)
                 O = O * Matrix.RotationY(ship_anV);
 
-            Matrix T = O * Helper.CalcularMatriz(ship_pos, new Vector3(ship_k, ship_k, ship_k), ship_vel, ship_bitan, ship_N);
+            Matrix T = O * Helper.CalcularMatriz(ship_pos, ship_k, ship_vel, ship_bitan, ship_N);
             effect.SetValue("ssao", 0);
             Vector3 LP = ship_pos + ship_vel * 220 + ship_N * 150;
             effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
-            foreach (TgcMesh mesh in xwing)
-            {
-                mesh.Transform = T;
-                mesh.Technique = technique;
-                mesh.render();
-            }
-            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
 
+
+            if (technique == "GlowMap")
+            {
+                TgcShaders.Instance.setShaderMatrix(effect, T);
+                effect.Begin(FX.None);
+                effect.BeginPass(0);
+
+                // 15 = motores
+                xwing[0].D3dMesh.DrawSubset(15);
+                xwing[1].D3dMesh.DrawSubset(15);
+
+                effect.EndPass();
+                effect.End();
+            }
+            else
+            {
+                foreach (TgcMesh mesh in xwing)
+                {
+                    mesh.Transform = T;
+                    mesh.Technique = technique;
+                    mesh.render();
+                }
+            }
+
+
+            effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LightPos));
         }
+
+        public void DrawLine(Vector3 p0, Vector3 p1, Vector3 up,float dw, Color color)
+        {
+        
+            Vector3 v = p1 - p0;
+            v.Normalize();
+            Vector3 n = Vector3.Cross(v, up);
+            Vector3 w = Vector3.Cross(n, v);
+
+            Vector3[] p = new Vector3[8];
+
+            dw *= 0.5f;
+            p[0] = p0 - n * dw;
+            p[1] = p1 - n * dw;
+            p[2] = p1 + n * dw;
+            p[3] = p0 + n * dw;
+            for (int i = 0; i < 4; ++i)
+            {
+                p[4 + i] = p[i] + w * dw;
+                p[i] -= w * dw;
+            }
+
+            int[] index_buffer = { 0, 1, 2, 0, 2, 3, 
+                                       4, 5, 6, 4, 6, 7, 
+                                       0, 1, 5, 0, 5, 4, 
+                                       3, 2, 6, 3, 6, 7 };
+
+            VERTEX_POS_COLOR[] pt = new VERTEX_POS_COLOR[index_buffer.Length];
+            for(int i=0;i< index_buffer.Length;++i)
+            {
+                int index = index_buffer[i];
+                pt[i].x = p[index].X;
+                pt[i].y = p[index].Y;
+                pt[i].z = p[index].Z;
+                pt[i].color = color.ToArgb();
+            }
+         
+            // dibujo como lista de triangulos
+            var device = D3DDevice.Instance.Device;
+            device.VertexFormat = VertexFormats.Position | VertexFormats.Diffuse;
+            device.DrawUserPrimitives(PrimitiveType.TriangleList, index_buffer.Length/3, pt);
+        }
+
 
         /// <summary>
         ///     Se llama cuando termina la ejecución del ejemplo.

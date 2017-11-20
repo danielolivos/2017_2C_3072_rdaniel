@@ -9,16 +9,6 @@ float screen_dx;					// tamaño de la pantalla en pixels
 float screen_dy;
 float time;
 
-texture texSkybox;
-sampler2D SkyBoxMap = sampler_state
-{
-	Texture = (texSkybox);
-	ADDRESSU = MIRROR;
-	ADDRESSV = MIRROR;
-	MINFILTER = LINEAR;
-	MAGFILTER = LINEAR;
-	MIPFILTER = LINEAR;
-};
 
 void VSCopy(float4 vPos : POSITION, float2 vTex : TEXCOORD0, out float4 oPos : POSITION, out float2 oScreenPos : TEXCOORD0)
 {
@@ -28,75 +18,6 @@ void VSCopy(float4 vPos : POSITION, float2 vTex : TEXCOORD0, out float4 oPos : P
 }
 
 
-float4 texCube_skybox(float3 d)
-{
-	float3 absd = abs(d);
-	float s0 = 0; 
-	float t0 = 0; 
-	float s,t;
-	float sc, tc, ma;
-
-	if ((absd.x >= absd.y) && (absd.x >= absd.z)) 
-	{
-		if (d.x > 0.0f) 
-		{
-			// right
-			s0 = 0.5 , t0 = 1.0/3.0;
-			sc = -d.z; tc = -d.y; ma = absd.x;
-		} 
-		else 
-		{
-			// left
-			s0 = 0 , t0 = 1.0/3.0;
-			sc = d.z; tc = -d.y; ma = absd.x;
-		}
-	}
-	if ((absd.y >= absd.x) && (absd.y >= absd.z)) 
-	{
-		if (d.y > 0.0f) 
-		{
-			// top
-			s0 = 0.25 , t0 = 0;
-			sc = d.x; tc = d.z; ma = absd.y;
-		} 
-		else 
-		{
-			// bottom
-			s0 = 0.25 , t0 = 2.0/3.0;
-			sc = d.x; tc = -d.z; ma = absd.y;
-		}
-	}
-	if ((absd.z >= absd.x) && (absd.z >= absd.y)) 
-	{
-		if (d.z > 0.0f) 
-		{
-			// front
-			s0 = 0.25 , t0 = 1.0/3.0;
-			sc = d.x; tc = -d.y; ma = absd.z;
-		} 
-		else 
-		{
-			// back
-			s0 = 0.75 , t0 = 1.0/3.0;
-			sc = -d.x; tc = -d.y; ma = absd.z;
-		}
-	}
-
-	if (ma == 0.0f) 
-	{
-		s = 0.0f;
-		t = 0.0f;
-	} 
-	else 
-	{
-		s = ((sc / ma) + 1.0f) * 0.5f;
-		t = ((tc / ma) + 1.0f) * 0.5f;
-	}
-	float ep = 0.01f;
-	s = clamp(s , ep , 1-ep);
-	t = clamp(t , ep , 1-ep);
-	return tex2Dlod(SkyBoxMap, float4(s0+ s /4.0 ,t0+ t/3.0,0,0));
-}
 
 float3 LookFrom;
 float3 ViewDir;
@@ -111,39 +32,17 @@ struct PS_OUTPUT
 
 
 
-PS_OUTPUT ps_skybox(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) 
-{
-	PS_OUTPUT rta;
-	float x = vpos.x;
-	float y = vpos.y;
-	float3 rd = normalize(ViewDir + Dy*(0.5*(screen_dy-2*y)) - Dx*(0.5*(2*x-screen_dx)));	
-	rta.color = texCube_skybox(rd);
-	rta.depth = 1;
-	return rta;
-}
-
-technique SkyBox
-{
-	pass Pass_0
-	{
-		VertexShader = compile vs_3_0 VSCopy();
-		PixelShader = compile ps_3_0 ps_skybox();
-	}
-}
-
 
 // volume explosion shader
 // simon green / nvidia 2012
 // http://developer.download.nvidia.com/assets/gamedev/files/gdc12/GDC2012_Mastering_DirectX11_with_Unity.pdf
-
-const int _MaxSteps = 32;
 const float _DistThreshold = 0.005;
-
 // parametros
 float4 _Sphere = float4(0,0,0,150.0);
 float _NoiseFreq = 0.1;
 float _NoiseAmp = -50.0;
 const float3 _NoiseAnim = float3(1, 1, 1);
+float _ExploAlpha = 1;
 
 float hash( float n )
 {
@@ -227,7 +126,7 @@ float4 gradient(float x)
 	const float4 c0 = float4(4, 4, 4, 1);	// hot white
 	const float4 c1 = float4(1, 1, 0, 1);	// yellow
 	const float4 c2 = float4(1, 0, 0, 1);	// red
-	const float4 c3 = float4(0.4, 0.4, 0.4, 4);	// grey
+	const float4 c3 = float4(0.4, 0.4, 0.4,4);	// grey
 	
 	float t = frac(x*3.0);
 	float4 c;
@@ -251,18 +150,19 @@ float4 shade(float3 p, float displace)
 	float3 n = dfNormal(p);
 	float diffuse = n.z*0.5+0.5;
 	c.rgb = lerp(c.rgb, c.rgb*diffuse, clamp((displace-0.5)*2.0, 0.0, 1.0));
+	c.a = _ExploAlpha;
 	return c;
 }
 
 // sphere trace: algoritmo estandard de ray tracing distance fields
-float3 sphereTrace(float3 rayOrigin, float3 rayDir, out bool hit, out float displace)
+float3 sphereTrace(uniform int max_steps,float3 rayOrigin, float3 rayDir, out bool hit, out float displace)
 {
 	float3 pos = rayOrigin;
 	hit = false;
 	displace = 0.0;	
 	float d;
 	float disp;
-	for(int i=0; i<_MaxSteps; i++) {
+	for(int i=0; i<max_steps; i++) {
 		d = distanceFunc(pos, disp);
         	if (d < _DistThreshold) {
 			hit = true;
@@ -275,30 +175,24 @@ float3 sphereTrace(float3 rayOrigin, float3 rayDir, out bool hit, out float disp
 }
 
 
-PS_OUTPUT ps_explosion(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) 
+PS_OUTPUT ps_explosion(uniform int max_steps, in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) 
 {
-	PS_OUTPUT rta;
 	float x = vpos.x;
 	float y = vpos.y;
-	
 	float3 rd = normalize(ViewDir + Dy*(0.5*(screen_dy-2*y)) - Dx*(0.5*(2*x-screen_dx)));	
-	rta.color = texCube_skybox(rd);
-	rta.depth = 1;
-
     // sphere trace distance field
     bool hit;
     float displace;
-    float3 hitPos = sphereTrace(LookFrom, rd, hit, displace);
-    if (hit) 
-	{
-		// shade
-   		rta.color = shade(hitPos, displace);	
-		float t = length(hitPos - LookFrom);
-		float Z = clamp(Zn + t , Zn,Zf);
-		rta.depth = MatProjQ * (1-Zn / Z);
-	
-	}
-
+    float3 hitPos = sphereTrace(max_steps,LookFrom, rd, hit, displace);
+    if (!hit) 
+		discard;
+		
+	// shade
+	PS_OUTPUT rta;
+	rta.color = shade(hitPos, displace);	
+	float t = length(hitPos - LookFrom);
+	float Z = clamp(Zn + t , Zn,Zf);
+	rta.depth = MatProjQ * (1-Zn / Z);
 	return rta;
 }
 
@@ -307,8 +201,25 @@ technique Explosion
 	pass Pass_0
 	{
 		VertexShader = compile vs_3_0 VSCopy();
-		PixelShader = compile ps_3_0 ps_explosion();
+		PixelShader = compile ps_3_0 ps_explosion(4);
 	}
+	pass Pass_1
+	{
+		VertexShader = compile vs_3_0 VSCopy();
+		PixelShader = compile ps_3_0 ps_explosion(8);
+
+	}
+	pass Pass_2
+	{
+		VertexShader = compile vs_3_0 VSCopy();
+		PixelShader = compile ps_3_0 ps_explosion(16);
+	}
+	pass Pass_3
+	{
+		VertexShader = compile vs_3_0 VSCopy();
+		PixelShader = compile ps_3_0 ps_explosion(32);
+	}
+	
 }
 
 
