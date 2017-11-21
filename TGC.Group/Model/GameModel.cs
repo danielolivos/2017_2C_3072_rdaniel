@@ -33,6 +33,14 @@ namespace TGC.Group.Model
         public int color;		// Color
     };
 
+    // Vertex format para dibujar en 2d 
+    public struct VERTEX2D
+    {
+        public float x, y, z, rhw;		// Posicion
+        public int color;		// Color
+    };
+
+
     public struct Disparo
     {
         public Vector3 Position;
@@ -72,11 +80,8 @@ namespace TGC.Group.Model
         public int cant_mesh;
         public TgcBoundingAxisAlignBox BoundingBox;
         public GameModel model;
-        public Matrix matWorldBock = new Matrix();
-        public Matrix matWorldSurfaceBlock = new Matrix();
         public int tipo;
-        public Matrix matWorldBlock;            // matrix word de todo el block
-        public Matrix matInvWorldBlock;
+        public Matrix matWorldBlock , matInvWorldBlock;
         public int cant_obstaculos = 3;
         // torreta 
         public int p_torreta = -1;           // nro de mesh que representa la torreta  (-1 si no tiene)
@@ -112,7 +117,7 @@ namespace TGC.Group.Model
             Position = pos;
             Orient = ptipo ==0 ? Helper.CalcularUVN(pos) : Matrix.Identity;
             MatPos = Matrix.Translation(pos);
-            matInvWorldBlock = matWorldBlock = OrientBlock * Orient* MatPos;
+            matWorldBlock = matInvWorldBlock = OrientBlock * Orient* MatPos;
             matInvWorldBlock.Invert();
             cant_obstaculos = pcant_obstaculos;
 
@@ -162,12 +167,6 @@ namespace TGC.Group.Model
                     max_z = p[i].Z;
             }
             BoundingBox = new TgcBoundingAxisAlignBox(new Vector3(min_x, min_y, min_z), new Vector3(max_x, max_y, max_z));
-
-            // matriz que transforma una caja de 1 x 1 x 1 ubicada en orgin y sin orientacion
-            matWorldBock = Matrix.Scaling(new Vector3(largo, alto, ancho)) * T;
-
-            // matriz que transforma una mesh list que constituye un block (de 100x100x100) ubicada en orgin y sin orientacion
-            matWorldSurfaceBlock = Matrix.Translation(0, 7, 0) * Matrix.Scaling(new Vector3(0.01f, 0.1f, 0.01f)) * matWorldBock;
 
 
         }
@@ -382,15 +381,16 @@ namespace TGC.Group.Model
                 int index = mesh_index[i];
                 if (index != -1 )
                 {
-                    
+                    bool torreta = index == 5 || index == 12 ? true : false;
                     if (dist>20000 && index <= 5)
                         index += 7;
                     model.meshes[index].Transform = matWorld[i];
                     TgcShaders.Instance.setShaderMatrix(model.effect, matWorld[i]);
-                    model.effect.SetValue("ssao", index==5 || index==12 ?0:1);
+                    model.effect.SetValue("ssao", torreta ?0:1);
+                    model.effect.SetValue("f_red", torreta ? 0.15f : 0);        // la torreta unpoco roja
                     model.effect.CommitChanges();
                     // caso particular: la torreta tiene todo en el layer 25 y no tengo el sketchup para corregirlo
-                    model.meshes[index].D3dMesh.DrawSubset(index == 5 || index == 12 ? 25 : 0);
+                    model.meshes[index].D3dMesh.DrawSubset(torreta ? 25 : 0);
                 }
             }
             return true;
@@ -460,6 +460,7 @@ namespace TGC.Group.Model
 
 
 
+
     }
 
 
@@ -497,6 +498,7 @@ namespace TGC.Group.Model
         public TgcBox BlockTrench;
         public TgcBox LODMesh;
 
+        public int vidas = 3;
         public float star_r = 8000;
         public Vector3 ship_k = new Vector3(0.09f , 0.09f , 0.11f);
         public Vector3 ship_vel;
@@ -533,6 +535,7 @@ namespace TGC.Group.Model
         public Texture g_pRenderTarget, g_pPosition, g_pNormal;
         public Texture g_pRenderTarget4, g_pRenderTarget4Aux;
 
+
         // Shadow map
         public int SHADOWMAP_SIZE = 1024;
         public Texture g_pShadowMap;    // Texture to which the shadow map is rendered
@@ -546,6 +549,7 @@ namespace TGC.Group.Model
         public Texture textura_bloques;
         public Vector3 LightPos;
         public float time = 0;
+        public int screen_dx, screen_dy;
 
 
         public bool mouseCaptured;
@@ -560,6 +564,11 @@ namespace TGC.Group.Model
         // explosiones
         public Explosion[] explosiones = new Explosion[4];
         public int p_explosion = 0;
+
+        // interface 2d
+        public Sprite sprite;
+        public Microsoft.DirectX.Direct3D.Font font;
+        public Texture[] gui_texture = new Texture[16];
 
 
         public override void Init()
@@ -610,7 +619,7 @@ namespace TGC.Group.Model
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m3-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m4-TgcScene.xml").Meshes[0]);
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m5-TgcScene.xml").Meshes[0]);
-            meshes.Add(loader.loadSceneFromFile(MediaDir + "torreta-TgcScene.xml").Meshes[0]);       // 5
+            meshes.Add(loader.loadSceneFromFile(MediaDir + "torreta2-TgcScene.xml").Meshes[0]);       // 5
             meshes.Add(loader.loadSceneFromFile(MediaDir + "m3-TgcScene.xml").Meshes[0]);
             //meshes.Add(TgcBox.fromSize(new Vector3(100, 100, 100), textura_surface).toMesh("q2"));
             meshes.Add(loader.loadSceneFromFile(MediaDir + "x1-TgcScene.xml").Meshes[0]);               // 7
@@ -669,6 +678,16 @@ namespace TGC.Group.Model
             // sistema de explosiones
             for (int i = 0; i < explosiones.Length; ++i)
                 explosiones[i].timer = 0;
+
+            sprite = new Sprite(d3dDevice);
+            // Fonts
+            font = new Microsoft.DirectX.Direct3D.Font(d3dDevice, 24, 0, FontWeight.Light, 0, false, CharacterSet.Default,
+                    Precision.Default, FontQuality.Default, PitchAndFamily.DefaultPitch, "Lucida Console");
+            font.PreloadGlyphs('0', '9');
+            font.PreloadGlyphs('a', 'z');
+            font.PreloadGlyphs('A', 'Z');
+
+            gui_texture[0] = TgcTexture.createTexture(MediaDir + "gui\\scoreboard.png").D3dTexture;
 
         }
 
@@ -775,10 +794,12 @@ namespace TGC.Group.Model
 
             effectBase.SetValue("g_RenderTarget", g_pRenderTarget);
             // Resolucion de pantalla
-            effectBase.SetValue("screen_dx", d3dDevice.PresentationParameters.BackBufferWidth);
-            effectBase.SetValue("screen_dy", d3dDevice.PresentationParameters.BackBufferHeight);
-            effectExplosion.SetValue("screen_dx", d3dDevice.PresentationParameters.BackBufferWidth);
-            effectExplosion.SetValue("screen_dy", d3dDevice.PresentationParameters.BackBufferHeight);
+            screen_dx = d3dDevice.PresentationParameters.BackBufferWidth;
+            screen_dy = d3dDevice.PresentationParameters.BackBufferHeight;
+            effectBase.SetValue("screen_dx", screen_dx);
+            effectBase.SetValue("screen_dy", screen_dy);
+            effectExplosion.SetValue("screen_dx", screen_dx);
+            effectExplosion.SetValue("screen_dy", screen_dy);
 
             CustomVertex.PositionTextured[] vertices =
             {
@@ -1347,7 +1368,7 @@ namespace TGC.Group.Model
                     Matrix T = O * Helper.CalcularMatriz(ship_pos, ship_k, ship_vel, ship_bitan, ship_N);
                     Vector3 pt = new Vector3(0, 0, 0);
                     pt.TransformCoordinate(Matrix.Translation(collision_pt[cd_index]) * T);
-                    device.SetRenderState(RenderStates.AlphaBlendEnable, true);
+                    device.SetRenderState(RenderStates.AlphaBlendEnable, false);
                     effect.SetValue("_Sphere", new Vector4(pt.X, pt.Y, pt.Z, 30.0f * t + 0.5f));
                     effect.SetValue("_NoiseAmp", -30f * t);
                     effect.SetValue("_NoiseFreq", 0.4f);
@@ -1475,20 +1496,87 @@ namespace TGC.Group.Model
             device.BeginScene();
             if (curr_mode == defines.MODO_GAME)
             {
-                DrawText.drawText("Bloques Completados: " + (int)(scene.Count - curr_block - 1), 400, 10, Color.Yellow);
+                //FillText(400, 10, (int)(scene.Count - curr_block - 1), Color.WhiteSmoke);
+                //FillRect(100, 100, 400, 20, Color.WhiteSmoke);
+                //float ptje = 1.0f - (float)curr_block / (float)scene.Count + 0.2f;
+                //FillRect(101, 101, (int)(400*ptje), 18, Color.Green);
                 if (intro_timer > 0)
                 {
                     if (intro_timer > 3f)
                     {
-                        DrawText.drawText("MOUSE   --> mover ", 400, 100, Color.Yellow);
-                        DrawText.drawText("CONTROL --> girar 90 grados", 400, 140, Color.Yellow);
-                        DrawText.drawText("M       --> lock / unlock mouse  ", 400, 180, Color.Yellow);
-                        DrawText.drawText("Esquiva obstaculos y paredes", 400, 400, Color.Yellow);
-                        DrawText.drawText("El objetivo es llegar al final de trench", 400, 420, Color.Yellow);
-                        DrawText.drawText("SPACE   --> Saltear la intro", 400, 440, Color.Yellow);
+                        Color color = Color.WhiteSmoke;
+                        int pos_y = 100;
+                        int dys = 40;
+                        FillText(screen_dx / 2, pos_y += dys, "MOUSE -> mover ", color , true);
+                        FillText(screen_dx / 2, pos_y += dys, "CONTROL -> girar 90 grados", color, true);
+                        FillText(screen_dx / 2, pos_y += dys, "M -> lock / unlock mouse", color, true);
+                        FillText(screen_dx / 2, pos_y += dys, "SPACE -> Saltear la intro", color, true);
+                        FillText(screen_dx / 2, pos_y += dys, "A -> Disparar", color, true);
+                        FillText(screen_dx / 2, pos_y += dys, "Esquiva obstaculos y paredes", color, true);
+                        FillText(screen_dx / 2, pos_y += dys, "El objetivo es llegar al final de trench", color, true);
                     }
                     else
-                        DrawText.drawText((int)intro_timer + "s para comenzar...", 400, 320, Color.Yellow);
+                        FillText(screen_dx / 2, screen_dy/2, (int)intro_timer + "s para comenzar...", Color.Yellow, true);
+                }
+
+                int x0 = (int)(screen_dx*0.8f);
+                int dx = 30;
+                int y0 = (int)(screen_dy*0.2f);
+                int dy = (int)(screen_dy * 0.6f); ;
+                DrawRect(x0, y0, x0 + dx, y0 + dy, 1, Color.WhiteSmoke);
+                float ex = (float)dx / 20.0f;
+                int cant_b = 5;
+                float ey = (float)dy / (Block.largo * cant_b) * 0.8f;
+                int db = (int)(Block.largo / (float)cant_b);
+                x0 += dx / 2;
+                y0 += dy - db/2;
+
+                Vector3 pt = ship_pos;
+                float dist0 = FastMath.Atan2(ship_pos.Y, ship_pos.Z) * star_r;
+
+                // scoreboard
+                Color verde = Color.FromArgb(60, 133, 59);
+                sprite.Begin(SpriteFlags.AlphaBlend);
+                sprite.Transform = Matrix.Transformation2D(new Vector2(0, 0), 0, new Vector2(1, (float)screen_dx/ (float)screen_dy), Vector2.Empty, 0, new Vector2(0, 0));
+                sprite.Draw(gui_texture[0], Rectangle.Empty, Vector3.Empty, new Vector3(screen_dx - 590,0,0), 
+                        Color.White);
+                sprite.Transform = Matrix.Identity;
+                sprite.End();
+                FillText(screen_dx - 550, 16, String.Format("{0:N}", Math.Abs(Math.Round(dist0, 3))), verde);
+                FillText(screen_dx - 420, 16, ""+ vidas, verde);
+                FillText(screen_dx - 320, 16, "0", verde);
+
+                int min = (int)(time / 60);
+                int seg = (int)(time % 60);
+                FillText(screen_dx - 150, 16, min+":" + seg,verde );
+
+
+
+                // preview:
+                // nave
+                FillRect(x0 -5, y0 -5  ,x0 +5, y0+5,Color.Red);
+                for (int s = 0; s < cant_b; ++s)
+                {
+                    Block B = scene[curr_block - s];
+                    for (int i = 0; i < B.cant_mesh; ++i)
+                    {
+                        if (B.mesh_type[i] == 1)
+                        {
+                            Vector3 pmin = B.pmin[i];
+                            Vector3 pmax = B.pmax[i];
+                            pmin.TransformCoordinate(B.matWorldBlock);
+                            pmax.TransformCoordinate(B.matWorldBlock);
+                            float d0 = FastMath.Atan2(pmin.Y, pmin.Z) * star_r;
+                            float d1 = FastMath.Atan2(pmax.Y, pmax.Z) * star_r;
+
+                            float X0 = Math.Abs(d0 - dist0);
+                            float X1 = Math.Abs(d1 - dist0);
+                            FillRect(x0 + pmin.X * ex, y0 - X0 * ey-3,
+                                         x0 + pmax.X * ex, y0 - X1 * ey+3,
+                                         Color.Beige);
+                        }
+                    }
+                    y0 -= db;
                 }
             }
             RenderFPS();
@@ -1695,9 +1783,10 @@ namespace TGC.Group.Model
             effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(LP));
 
 
-            if (technique == "GlowMap")
+            if (technique == "GlowMap" )
             {
                 TgcShaders.Instance.setShaderMatrix(effect, T);
+                effect.SetValue("glow_color", new Vector4(1,0.3f,0.3f,1));
                 effect.Begin(FX.None);
                 effect.BeginPass(0);
 
@@ -1762,6 +1851,139 @@ namespace TGC.Group.Model
             var device = D3DDevice.Instance.Device;
             device.VertexFormat = VertexFormats.Position | VertexFormats.Diffuse;
             device.DrawUserPrimitives(PrimitiveType.TriangleList, index_buffer.Length/3, pt);
+        }
+
+
+        // line 2d
+        public void DrawLine(float x0, float y0, float x1, float y1, int dw, Color color)
+        {
+            Vector2[] V = new Vector2[4];
+            V[0].X = x0;
+            V[0].Y = y0;
+            V[1].X = x1;
+            V[1].Y = y1;
+
+            if (dw < 1)
+                dw = 1;
+
+            // direccion normnal
+            Vector2 v = V[1] - V[0];
+            v.Normalize();
+            Vector2 n = new Vector2(-v.Y, v.X);
+
+            V[2] = V[1] + n * dw;
+            V[3] = V[0] + n * dw;
+
+            VERTEX2D[] pt = new VERTEX2D[16];
+            // 1er triangulo
+            pt[0].x = V[0].X;
+            pt[0].y = V[0].Y;
+            pt[1].x = V[1].X;
+            pt[1].y = V[1].Y;
+            pt[2].x = V[2].X;
+            pt[2].y = V[2].Y;
+
+            // segundo triangulo
+            pt[3].x = V[0].X;
+            pt[3].y = V[0].Y;
+            pt[4].x = V[2].X;
+            pt[4].y = V[2].Y;
+            pt[5].x = V[3].X;
+            pt[5].y = V[3].Y;
+
+            for (int t = 0; t < 6; ++t)
+            {
+                pt[t].z = 0.5f;
+                pt[t].rhw = 1;
+                pt[t].color = color.ToArgb();
+                ++t;
+            }
+
+            // dibujo como lista de triangulos
+            var device = D3DDevice.Instance.Device;
+            device.VertexFormat = VertexFormats.Transformed | VertexFormats.Diffuse;
+            device.DrawUserPrimitives(PrimitiveType.TriangleList, 2, pt);
+        }
+
+        public void DrawRect(float x0, float y0, float x1, float y1, int dw, Color color)
+        {
+            DrawLine(x0, y0, x1, y0, dw, color);
+            DrawLine(x0, y1, x1, y1, dw, color);
+            DrawLine(x0, y0, x0, y1, dw, color);
+            DrawLine(x1, y0, x1, y1, dw, color);
+        }
+
+        public void FillRect(float x0, float y0, float x1, float y1, Color color)
+        {
+            Vector2[] V = new Vector2[4];
+            V[0].X = x0;
+            V[0].Y = y0;
+            V[1].X = x0;
+            V[1].Y = y1;
+            V[2].X = x1;
+            V[2].Y = y1;
+            V[3].X = x1;
+            V[3].Y = y0;
+
+            VERTEX2D[] pt = new VERTEX2D[16];
+            // 1er triangulo
+            pt[0].x = V[0].X;
+            pt[0].y = V[0].Y;
+            pt[1].x = V[1].X;
+            pt[1].y = V[1].Y;
+            pt[2].x = V[2].X;
+            pt[2].y = V[2].Y;
+
+            // segundo triangulo
+            pt[3].x = V[0].X;
+            pt[3].y = V[0].Y;
+            pt[4].x = V[2].X;
+            pt[4].y = V[2].Y;
+            pt[5].x = V[3].X;
+            pt[5].y = V[3].Y;
+
+            for (int t = 0; t < 6; ++t)
+            {
+                pt[t].z = 0.5f;
+                pt[t].rhw = 1;
+                pt[t].color = color.ToArgb();
+                ++t;
+            }
+
+            // dibujo como lista de triangulos
+            var device = D3DDevice.Instance.Device;
+            device.VertexFormat = VertexFormats.Transformed | VertexFormats.Diffuse;
+            device.DrawUserPrimitives(PrimitiveType.TriangleList, 2, pt);
+        }
+
+
+        public void FillText(int x, int y, string text , Color color , bool center=false)
+        {
+            var device = D3DDevice.Instance.Device;
+            // elimino cualquier textura que me cague el modulate del vertex color
+            device.SetTexture(0, null);
+            // Desactivo el zbuffer
+            bool ant_zenable = device.RenderState.ZBufferEnable;
+            device.RenderState.ZBufferEnable = false;
+            // pongo la matriz identidad
+            Matrix matAnt = sprite.Transform * Matrix.Identity;
+            sprite.Transform = Matrix.Identity;
+            sprite.Begin(SpriteFlags.AlphaBlend);
+            if (center)
+            {
+                Rectangle rc = new Rectangle(0, y, screen_dx, y + 100);
+                font.DrawText(sprite, text, rc, DrawTextFormat.Center, color);
+            }
+            else
+            {
+                Rectangle rc = new Rectangle(x, y, x + 600, y + 100);
+                font.DrawText(sprite, text, rc, DrawTextFormat.NoClip | DrawTextFormat.Top | DrawTextFormat.Left, color);
+            }
+            sprite.End();
+            // Restauro el zbuffer
+            device.RenderState.ZBufferEnable = ant_zenable;
+            // Restauro la transformacion del sprite
+            sprite.Transform = matAnt;
         }
 
 

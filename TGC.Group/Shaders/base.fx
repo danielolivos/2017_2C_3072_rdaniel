@@ -12,6 +12,7 @@ int ssao = 1;
 float screen_dx;					// tamaño de la pantalla en pixels
 float screen_dy;
 float time;
+float f_red = 0;
 
 
 //Textura para DiffuseMap
@@ -241,6 +242,8 @@ float4 ps_main(PS_INPUT input) : COLOR0
 		
 	}
 	finalColor.rgb *= occ_factor * I;
+	finalColor.r += f_red;
+
 	return finalColor;
 	
 }
@@ -252,10 +255,12 @@ float4 ps_normal(PS_INPUT input) : COLOR0
 	return float4(Nn, 1);
 }
 
+float4 glow_color = float4(1,0,0,1);
 
 float4 ps_glow(PS_INPUT input) : COLOR0
 {
-	return tex2D(diffuseMap, input.Texcoord);
+	return glow_color;
+	//return tex2D(diffuseMap, input.Texcoord);
 }
 
 technique DefaultTechnique
@@ -403,14 +408,16 @@ float fish_kU = 0.25f;
 
 float4 PSPostProcess(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) : COLOR0
 {
+	/*
 	float2 center = float2(0.5,0.5);
 	float dist = distance(center, Tex);
     Tex -= center;
 	float percent = 1.0 - ((0.5 - dist) / 0.5) * fish_kU;
 	Tex *= percent;
     Tex += center;
+	*/
 	float2 TexG = Tex + float2(1.0/screen_dx , 1.0/screen_dy)*8.0;
-	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*2.0;
+	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*8.0;
 }
 
 technique PostProcess
