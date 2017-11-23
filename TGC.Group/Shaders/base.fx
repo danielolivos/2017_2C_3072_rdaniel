@@ -249,6 +249,26 @@ float4 ps_main(PS_INPUT input) : COLOR0
 }
 
 
+//Pixel Shader
+float4 ps_no_shadows(PS_INPUT input) : COLOR0
+{
+	float occ_factor = ssao ? input.WorldNormalOcc.w : 1;
+	float3 Nn = normalize(input.WorldNormalOcc.xyz);
+	float3 Ln = normalize(input.LightVec);
+	float3 Vn = normalize(input.ViewVec);
+	float4 texelColor = tex2D(diffuseMap, input.Texcoord);
+	float3 ambientLight = lightColor * materialAmbientColor * occ_factor;
+	float3 n_dot_l = dot(Nn, Ln);
+	float3 diffuseLight = lightColor * materialDiffuseColor.rgb * max(0.0, n_dot_l);
+	float ks = saturate(dot(reflect(-Ln,Nn), Vn));
+	float3 specularLight = specularFactor * lightColor * materialSpecularColor *pow(ks,materialSpecularExp);
+	float4 finalColor = float4(saturate(materialEmissiveColor + ambientLight + diffuseLight) * texelColor + specularLight, materialDiffuseColor.a);
+	finalColor.rgb *= occ_factor;
+	finalColor.r += f_red;
+	return finalColor;
+}
+
+
 float4 ps_normal(PS_INPUT input) : COLOR0
 {
 	float3 Nn = normalize(input.WorldNormalOcc.xyz);
@@ -269,6 +289,15 @@ technique DefaultTechnique
 	{
 		VertexShader = compile vs_3_0 vs_main();
 		PixelShader = compile ps_3_0 ps_main();
+	}
+}
+
+technique DefaultTechniqueNoShadows
+{
+	pass Pass_0
+	{
+		VertexShader = compile vs_3_0 vs_main();
+		PixelShader = compile ps_3_0 ps_no_shadows();
 	}
 }
 
@@ -404,6 +433,7 @@ technique SkyBox
 
 // Factor de distorcion del ojo de pez
 float fish_kU = 0.25f; 
+float glow_factor = 8.0f; 
 
 
 float4 PSPostProcess(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) : COLOR0
@@ -417,7 +447,7 @@ float4 PSPostProcess(in float2 Tex : TEXCOORD0, in float2 vpos : VPOS) : COLOR0
     Tex += center;
 	*/
 	float2 TexG = Tex + float2(1.0/screen_dx , 1.0/screen_dy)*8.0;
-	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*8.0;
+	return tex2D(RenderTarget, Tex) + tex2D(RenderTarget4, TexG)*glow_factor;
 }
 
 technique PostProcess
@@ -428,6 +458,7 @@ technique PostProcess
 		PixelShader = compile ps_3_0 PSPostProcess();
 	}
 }
+
 
 float4 PSDownFilter4( in float2 Tex : TEXCOORD0 ) : COLOR0
 {

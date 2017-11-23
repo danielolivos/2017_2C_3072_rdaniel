@@ -15,6 +15,7 @@ using TGC.Core.Collision;
 using System;
 using TGC.Core.Terrain;
 using System.Windows.Forms;
+using TgcViewer.Utils.Gui;
 
 namespace TGC.Group.Model
 {
@@ -24,6 +25,7 @@ namespace TGC.Group.Model
         public const int MODO_CAMARA = 0;
         public const int MODO_GAME = 1;
         public const int MODO_TEST_BLOCK = 2;
+        public const int MODO_INTRO = 3;
     }
 
     // Vertex format posicion y color
@@ -386,7 +388,7 @@ namespace TGC.Group.Model
                         index += 7;
                     model.meshes[index].Transform = matWorld[i];
                     TgcShaders.Instance.setShaderMatrix(model.effect, matWorld[i]);
-                    model.effect.SetValue("ssao", torreta ?0:1);
+                    model.effect.SetValue("ssao", torreta ?0:model.ssao?1:0);
                     model.effect.SetValue("f_red", torreta ? 0.15f : 0);        // la torreta unpoco roja
                     model.effect.CommitChanges();
                     // caso particular: la torreta tiene todo en el layer 25 y no tengo el sketchup para corregirlo
@@ -525,9 +527,6 @@ namespace TGC.Group.Model
         public float r_timer = 0;      // timer de resurreccion
         public Vector4 _Sphere;
 
-
-
-
         private static readonly Random random = new Random();
 
         public Effect effect , effectBase , effectExplosion;
@@ -550,6 +549,12 @@ namespace TGC.Group.Model
         public Vector3 LightPos;
         public float time = 0;
         public int screen_dx, screen_dy;
+        public bool pausa = false;
+
+        // opciones dx
+        public bool shadow_map = true;
+        public bool ssao = true;
+        public bool glow = true;
 
 
         public bool mouseCaptured;
@@ -569,6 +574,11 @@ namespace TGC.Group.Model
         public Sprite sprite;
         public Microsoft.DirectX.Direct3D.Font font;
         public Texture[] gui_texture = new Texture[16];
+
+        // gui 
+        DXGui gui = new DXGui();
+        public bool gui_mode = true;
+        public bool opciones_dx = false;
 
 
         public override void Init()
@@ -593,7 +603,109 @@ namespace TGC.Group.Model
             xm = Input.Xpos;
             ym = Input.Ypos;
             wm = Input.WheelPos;
+
+            // gui
+            InitGui();
         }
+
+        public void InitGui()
+        {
+            // gui
+            DXGui.mediaDir = MediaDir;
+            gui.Input = Input;
+            gui.Create();
+            // menu principal
+            gui.InitDialog();
+
+            int W = screen_dx;
+            int H = screen_dy;
+            int margen_x = 50;
+            int dx = (W - 3*margen_x)/2;
+            int x0 = margen_x;
+            int y0 = 100;
+            int dy = 20;
+            int dy2 = 30;
+
+            gui.InsertFrame("NIVEL DE DIFICULTAD", x0, y0-40, dx, 460, Color.FromArgb(200,0,0,0),
+                frameBorder.redondeado);
+
+            int pos_x = x0 + 50;
+            gui_radio_button pbutton = gui.InsertRadioButton(100, "FACIL", pos_x, y0 += dy2, dx, dy);
+            pbutton.marcado = true;
+            gui.InsertRadioButton(101, "INTERMEDIO", pos_x, y0 += dy2, dx, dy);
+            gui.InsertRadioButton(102, "DIFICIL", pos_x, y0 += dy2, dx, dy);
+            gui.InsertRadioButton(103, "IMPOSIBLE", pos_x, y0 += dy2, dx, dy);
+            gui.InsertButton(104, "Play", x0 + dx/2 - 100, y0 += 80, 200, 40);
+            gui.InsertLine(x0, y0 += 80, dx, 0);
+            gui.InsertStatic("El objetivo es avanzar en el Trench lo maximo posible", pos_x, y0 += dy2, dx, dy);
+            gui.InsertStatic("esquivando obstaculos y disparos de las torretas", pos_x, y0 += dy2, dx, dy);
+
+            y0 = 100;
+            x0 = W/2+margen_x/2;
+            gui.InsertFrame("COMANDOS", x0, y0 - 40, dx, 460, Color.FromArgb(200, 0, 0, 0),frameBorder.redondeado);
+            pos_x = x0 + 50;
+            gui.InsertImagen("xwing.png", pos_x, y0, 0, dy);
+            gui.InsertStatic("mover la nave", x0, y0 += dy2, dx/2, dy,DrawTextFormat.Right);
+            gui.InsertStatic("girar 90 grados", x0, y0 += dy2, dx/2, dy, DrawTextFormat.Right);
+            gui.InsertStatic("disparar", x0, y0 += dy2, dx / 2, dy, DrawTextFormat.Right);
+            gui.InsertStatic("lock mouse", x0, y0 += dy2, dx / 2, dy, DrawTextFormat.Right);
+            gui.InsertStatic("pausa", x0, y0 += dy2, dx / 2, dy, DrawTextFormat.Right);
+            gui.InsertStatic("opciones", x0, y0 += dy2, dx / 2, dy, DrawTextFormat.Right);
+
+            gui.InsertLine(x0, y0 += 100, dx, 0);
+            gui.InsertStatic("Prueba de Concepto de TGC Framework", pos_x, y0 += dy2, dx, dy);
+            gui.InsertStatic("UTN TGC", x0, y0 += dy2, dx, dy,DrawTextFormat.Center);
+
+
+            pos_x = x0 + dx/2 + 20;
+            y0 = 100;
+            gui.InsertImagen("xwing.png", pos_x, y0 += dy2, 0, dy);
+            gui.InsertImagen("xwing.png", pos_x, y0 += dy2, 0, dy);
+            gui.InsertImagen("xwing.png", pos_x, y0 += dy2, 0, dy);
+            gui.InsertImagen("xwing.png", pos_x, y0 += dy2, 0, dy);
+            gui.InsertImagen("xwing.png", pos_x, y0 += dy2, 0, dy);
+
+
+            pos_x = x0 + dx / 2 + 50;
+            y0 = 100;
+            gui.InsertStatic("[MOUSE]", pos_x, y0 += dy2, dx / 2, dy);
+            gui.InsertStatic("[CONTROL]", pos_x, y0 += dy2, dx / 2, dy);
+            gui.InsertStatic("[A]", pos_x, y0 += dy2, dx / 2, dy);
+            gui.InsertStatic("[M]", pos_x, y0 += dy2, dx / 2, dy);
+            gui.InsertStatic("[P]", pos_x, y0 += dy2, dx / 2, dy);
+            gui.InsertStatic("[F2]", pos_x, y0 += dy2, dx / 2, dy);
+
+
+        }
+
+
+        public void InitGuiOpciones()
+        {
+            // gui
+            gui.InitDialog();
+            int W = screen_dx;
+            int H = screen_dy;
+            int margen_x = 50;
+            int dx = (W - 3 * margen_x) / 2;
+            int x0 = margen_x;
+            int y0 = 100;
+            int dy = 20;
+            int dy2 = 30;
+
+            gui.InsertFrame("Opciones DirectX", x0, y0 - 40, dx, 460, Color.FromArgb(100, 100, 100, 0),
+                frameBorder.redondeado);
+
+            int pos_x = x0 + 50;
+            gui_check_button pbutton = gui.InsertCheckButton(100, "SSAO - Screen Space Ambient Occlusion", pos_x, y0 += dy2, dx, dy);
+            pbutton.marcado = true;
+            pbutton = gui.InsertCheckButton(101, "Shadow Map", pos_x, y0 += dy2, dx, dy);
+            pbutton.marcado = true;
+            pbutton = gui.InsertCheckButton(102, "Glowing", pos_x, y0 += dy2, dx, dy);
+            pbutton.marcado = true;
+            gui.InsertButton(99, "Ocultar menu de opciones ", x0 + dx / 2 - 150, y0 += 80, 300, 40);
+            gui.InsertButton(98, "Pausar / Continuar juego", x0 + dx / 2 - 150, y0 += 80, 300, 40);
+        }
+
 
 
         public void InitScene()
@@ -688,6 +800,7 @@ namespace TGC.Group.Model
             font.PreloadGlyphs('A', 'Z');
 
             gui_texture[0] = TgcTexture.createTexture(MediaDir + "gui\\scoreboard.png").D3dTexture;
+            gui_texture[1] = TgcTexture.createTexture(MediaDir + "gui\\fondo.png").D3dTexture;
 
         }
 
@@ -902,6 +1015,56 @@ namespace TGC.Group.Model
             if (ElapsedTime < 0 || ElapsedTime > 10)
                 return;
 
+            if (gui_mode)
+            {
+                GuiMessage msg = gui.Update(ElapsedTime);
+                if (msg.message == MessageType.WM_COMMAND && msg.id == 104)
+                {
+                    gui_mode = false;
+                    // de paso creo el gui de opciones
+                    InitGuiOpciones();
+                }
+                return;
+            }
+
+
+            if (opciones_dx)
+            {
+                GuiMessage msg = gui.Update(ElapsedTime);
+                if (msg.message == MessageType.WM_COMMAND)
+                {
+                    switch (msg.id)
+                    {
+                        case 99:
+                            opciones_dx = false;
+                            break;
+                        case 98:
+                            pausa = !pausa;
+                            break;
+                        case 100:
+                            ssao = !ssao;
+                            gui.GetDlgItem(100).marcado = ssao;
+                            break;
+                        case 101:
+                            shadow_map = !shadow_map;
+                            gui.GetDlgItem(101).marcado = shadow_map;
+                            break;
+                        case 102:
+                            glow = !glow;
+                            gui.GetDlgItem(102).marcado = glow;
+                            break;
+                    }
+
+                }
+            } 
+            if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.F2))
+                opciones_dx = !opciones_dx;
+            if (Input.keyPressed(Microsoft.DirectX.DirectInput.Key.P))
+                pausa = !pausa;
+
+            if (pausa)
+                return;
+
             // actualizo los blockes
             if (curr_mode == defines.MODO_GAME && curr_block>2)
             {
@@ -949,6 +1112,7 @@ namespace TGC.Group.Model
                 if (r_timer < 0)
                     r_timer = 0;
             }
+
 
             if (Input.keyDown(Microsoft.DirectX.DirectInput.Key.Space) && intro_timer != 0)
                 intro_timer = 0.0001f;
@@ -1290,10 +1454,35 @@ namespace TGC.Group.Model
         }
 
 
+        public void RenderIntro()
+        {
+            var device = D3DDevice.Instance.Device;
+            device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
+            device.BeginScene();
+
+            // fondo
+            sprite.Begin(SpriteFlags.AlphaBlend);
+            sprite.Transform = Matrix.Transformation2D(new Vector2(0, 0), 0, new Vector2(1, 1), Vector2.Empty, 0, new Vector2(0, 0));
+            sprite.Draw(gui_texture[1], new Rectangle(0,0,screen_dx,screen_dy), Vector3.Empty, new Vector3(0, 0, 0),Color.White);
+            sprite.Transform = Matrix.Identity;
+            sprite.End();
+
+            // gui pp dicho
+            gui.Render();
+            device.EndScene();
+            device.Present();
+
+        }
 
 
         public override void Render()
         {
+
+            if (gui_mode)
+            {
+                RenderIntro();
+                return;
+            }
 
             //Genero el shadow map
             RenderShadowMap();
@@ -1309,7 +1498,7 @@ namespace TGC.Group.Model
             device.BeginScene();
 
             effect = effectBase;
-            RenderScene("DefaultTechnique");
+            RenderScene(shadow_map ? "DefaultTechnique" : "DefaultTechniqueNoShadows");
 
             if (curr_mode == defines.MODO_GAME)
             {
@@ -1398,7 +1587,7 @@ namespace TGC.Group.Model
             effect = effectBase;
             RenderDisparos();
 
-            if (explosion_timer == 0)
+            if (explosion_timer == 0 && glow)
             {
                 // glow effect
                 // 1er pasada: Genero el glowmap
@@ -1407,6 +1596,7 @@ namespace TGC.Group.Model
                 device.SetRenderTarget(0, pSurf);
                 device.BeginScene();
                 device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
+
                 effect.Technique = "GlowMap";
                 RenderShip("GlowMap");
                 RenderDisparos();
@@ -1473,6 +1663,7 @@ namespace TGC.Group.Model
             effect.SetValue("g_Normal", g_pNormal);
             effect.SetValue("matProj", device.Transform.Projection);
             effect.SetValue("fish_kU", 0.1f);
+            effect.SetValue("glow_factor", glow?8.0f:0.0f);
 
             device.Clear(ClearFlags.Target | ClearFlags.ZBuffer, Color.Black, 1.0f, 0);
             effect.Begin(FX.None);
@@ -1485,6 +1676,14 @@ namespace TGC.Group.Model
 
             // dibujo el scoreboard, tiempo, vidas, etc (y fps)
             RenderHUD();
+
+            if (opciones_dx)
+            {
+                device.BeginScene();
+                gui.Render();
+                device.EndScene();
+            }
+
             device.Present();
         }
 
@@ -1496,87 +1695,71 @@ namespace TGC.Group.Model
             device.BeginScene();
             if (curr_mode == defines.MODO_GAME)
             {
-                //FillText(400, 10, (int)(scene.Count - curr_block - 1), Color.WhiteSmoke);
-                //FillRect(100, 100, 400, 20, Color.WhiteSmoke);
-                //float ptje = 1.0f - (float)curr_block / (float)scene.Count + 0.2f;
-                //FillRect(101, 101, (int)(400*ptje), 18, Color.Green);
                 if (intro_timer > 0)
                 {
-                    if (intro_timer > 3f)
-                    {
-                        Color color = Color.WhiteSmoke;
-                        int pos_y = 100;
-                        int dys = 40;
-                        FillText(screen_dx / 2, pos_y += dys, "MOUSE -> mover ", color , true);
-                        FillText(screen_dx / 2, pos_y += dys, "CONTROL -> girar 90 grados", color, true);
-                        FillText(screen_dx / 2, pos_y += dys, "M -> lock / unlock mouse", color, true);
-                        FillText(screen_dx / 2, pos_y += dys, "SPACE -> Saltear la intro", color, true);
-                        FillText(screen_dx / 2, pos_y += dys, "A -> Disparar", color, true);
-                        FillText(screen_dx / 2, pos_y += dys, "Esquiva obstaculos y paredes", color, true);
-                        FillText(screen_dx / 2, pos_y += dys, "El objetivo es llegar al final de trench", color, true);
-                    }
-                    else
-                        FillText(screen_dx / 2, screen_dy/2, (int)intro_timer + "s para comenzar...", Color.Yellow, true);
+                    FillText(screen_dx / 2, screen_dy / 2, (int)intro_timer + "s para comenzar...", Color.Yellow, true);
                 }
-
-                int x0 = (int)(screen_dx*0.8f);
-                int dx = 30;
-                int y0 = (int)(screen_dy*0.2f);
-                int dy = (int)(screen_dy * 0.6f); ;
-                DrawRect(x0, y0, x0 + dx, y0 + dy, 1, Color.WhiteSmoke);
-                float ex = (float)dx / 20.0f;
-                int cant_b = 5;
-                float ey = (float)dy / (Block.largo * cant_b) * 0.8f;
-                int db = (int)(Block.largo / (float)cant_b);
-                x0 += dx / 2;
-                y0 += dy - db/2;
-
-                Vector3 pt = ship_pos;
-                float dist0 = FastMath.Atan2(ship_pos.Y, ship_pos.Z) * star_r;
-
-                // scoreboard
-                Color verde = Color.FromArgb(60, 133, 59);
-                sprite.Begin(SpriteFlags.AlphaBlend);
-                sprite.Transform = Matrix.Transformation2D(new Vector2(0, 0), 0, new Vector2(1, (float)screen_dx/ (float)screen_dy), Vector2.Empty, 0, new Vector2(0, 0));
-                sprite.Draw(gui_texture[0], Rectangle.Empty, Vector3.Empty, new Vector3(screen_dx - 590,0,0), 
-                        Color.White);
-                sprite.Transform = Matrix.Identity;
-                sprite.End();
-                FillText(screen_dx - 550, 16, String.Format("{0:N}", Math.Abs(Math.Round(dist0, 3))), verde);
-                FillText(screen_dx - 420, 16, ""+ vidas, verde);
-                FillText(screen_dx - 320, 16, "0", verde);
-
-                int min = (int)(time / 60);
-                int seg = (int)(time % 60);
-                FillText(screen_dx - 150, 16, min+":" + seg,verde );
-
-
-
-                // preview:
-                // nave
-                FillRect(x0 -5, y0 -5  ,x0 +5, y0+5,Color.Red);
-                for (int s = 0; s < cant_b; ++s)
+                else
                 {
-                    Block B = scene[curr_block - s];
-                    for (int i = 0; i < B.cant_mesh; ++i)
-                    {
-                        if (B.mesh_type[i] == 1)
-                        {
-                            Vector3 pmin = B.pmin[i];
-                            Vector3 pmax = B.pmax[i];
-                            pmin.TransformCoordinate(B.matWorldBlock);
-                            pmax.TransformCoordinate(B.matWorldBlock);
-                            float d0 = FastMath.Atan2(pmin.Y, pmin.Z) * star_r;
-                            float d1 = FastMath.Atan2(pmax.Y, pmax.Z) * star_r;
+                    int x0 = (int)(screen_dx * 0.8f);
+                    int dx = 30;
+                    int y0 = (int)(screen_dy * 0.2f);
+                    int dy = (int)(screen_dy * 0.6f); ;
+                    DrawRect(x0, y0, x0 + dx, y0 + dy, 1, Color.WhiteSmoke);
+                    float ex = (float)dx / 20.0f;
+                    int cant_b = 5;
+                    float ey = (float)dy / (Block.largo * cant_b) * 0.8f;
+                    int db = (int)(Block.largo / (float)cant_b);
+                    x0 += dx / 2;
+                    y0 += dy - db / 2;
 
-                            float X0 = Math.Abs(d0 - dist0);
-                            float X1 = Math.Abs(d1 - dist0);
-                            FillRect(x0 + pmin.X * ex, y0 - X0 * ey-3,
-                                         x0 + pmax.X * ex, y0 - X1 * ey+3,
-                                         Color.Beige);
+                    Vector3 pt = ship_pos;
+                    float dist0 = FastMath.Atan2(ship_pos.Y, ship_pos.Z) * star_r;
+
+                    // scoreboard
+                    Color verde = Color.FromArgb(60, 133, 59);
+                    sprite.Begin(SpriteFlags.AlphaBlend);
+                    sprite.Transform = Matrix.Transformation2D(new Vector2(0, 0), 0, new Vector2(1, (float)screen_dx / (float)screen_dy), Vector2.Empty, 0, new Vector2(0, 0));
+                    sprite.Draw(gui_texture[0], Rectangle.Empty, Vector3.Empty, new Vector3(screen_dx - 590, 0, 0),
+                            Color.White);
+                    sprite.Transform = Matrix.Identity;
+                    sprite.End();
+                    FillText(screen_dx - 550, 16, String.Format("{0:N}", Math.Abs(Math.Round(dist0, 3))), verde);
+                    FillText(screen_dx - 420, 16, "" + vidas, verde);
+                    FillText(screen_dx - 320, 16, "0", verde);
+
+                    int min = (int)(time / 60);
+                    int seg = (int)(time % 60);
+                    FillText(screen_dx - 150, 16, min + ":" + seg, verde);
+
+
+
+                    // preview:
+                    // nave
+                    FillRect(x0 - 5, y0 - 5, x0 + 5, y0 + 5, Color.Red);
+                    for (int s = 0; s < cant_b; ++s)
+                    {
+                        Block B = scene[curr_block - s];
+                        for (int i = 0; i < B.cant_mesh; ++i)
+                        {
+                            if (B.mesh_type[i] == 1)
+                            {
+                                Vector3 pmin = B.pmin[i];
+                                Vector3 pmax = B.pmax[i];
+                                pmin.TransformCoordinate(B.matWorldBlock);
+                                pmax.TransformCoordinate(B.matWorldBlock);
+                                float d0 = FastMath.Atan2(pmin.Y, pmin.Z) * star_r;
+                                float d1 = FastMath.Atan2(pmax.Y, pmax.Z) * star_r;
+
+                                float X0 = Math.Abs(d0 - dist0);
+                                float X1 = Math.Abs(d1 - dist0);
+                                FillRect(x0 + pmin.X * ex, y0 - X0 * ey - 3,
+                                             x0 + pmax.X * ex, y0 - X1 * ey + 3,
+                                             Color.Beige);
+                            }
                         }
+                        y0 -= db;
                     }
-                    y0 -= db;
                 }
             }
             RenderFPS();
@@ -1731,7 +1914,7 @@ namespace TGC.Group.Model
 
             effect.SetValue("lightPosition", TgcParserUtils.vector3ToFloat4Array(ship_pos + ship_N*1000));
             effect.SetValue("texDiffuseMap", textura_bloques);
-            effect.SetValue("ssao", 1);
+            effect.SetValue("ssao", ssao?1:0);
             effect.Begin(0);
             effect.BeginPass(0);
             foreach (Block bloque in scene)
